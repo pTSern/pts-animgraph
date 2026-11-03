@@ -1,5 +1,5 @@
-import { AssetInfo } from '@cocos/creator-types/editor/packages/asset-db/@types/public';
-import type { pTS_IAnimGraphState, pTS_IGraphDump, pTS_ILayerDump, pTS_IStateDump } from './main';
+import type { AssetInfo } from '@cocos/creator-types/editor/packages/asset-db/@types/public';
+import type { pTS_IAnimGraphState, pTS_IGraphDump, pTS_ILayerDump, pTS_IStateDump, pTS_IStateMachineDump, pTS_ITransitionDump } from './main';
 
 interface pTSEditorGlobal {
     Message: {
@@ -27,6 +27,8 @@ export const $ = {
     layersSection: '#pTS-layers-section',
     layerSelect: '#pTS-layer-select',
     graphCanvasContainer: '#pTS-graph-canvas-container',
+    transitionDetailsCard: '#pTS-transition-details-card',
+    transitionDetailsContent: '#pTS-transition-details-content',
     stateDetailsCard: '#pTS-state-details-card',
     stateDetailsContent: '#pTS-state-details-content',
     scriptCodePanel: '#pTS-script-code-panel',
@@ -92,6 +94,8 @@ export const style = `
 }
 
 .pTS-section-box {
+    flex-shrink: 0;
+    min-width: 0;
     border: 1px solid #333333;
     border-radius: 4px;
     background: #242424;
@@ -167,21 +171,51 @@ export const style = `
 .pTS-canvas-viewport {
     position: relative;
     width: 100%;
-    height: 280px;
+    min-height: 280px;
+    box-sizing: border-box;
+    padding: 8px;
     background: #141414;
-    background-image: 
-        linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px);
-    background-size: 20px 20px;
-    overflow: hidden;
-    border-bottom: 1px solid #333;
     cursor: default;
     user-select: none;
 }
 
+.pTS-machine-card {
+    min-width: 0;
+    margin-bottom: 10px;
+    border: 1px solid #3c4856;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.pTS-machine-header {
+    padding: 8px;
+    background: #252e39;
+    font-size: 12px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.pTS-machine-path {
+    display: block;
+    margin-top: 3px;
+    color: #abbfd3;
+    font-size: 11px;
+    font-weight: 400;
+}
+.pTS-machine-viewport {
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    background-image:
+        linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
 .pTS-graph-svg {
+    display: block;
     width: 100%;
-    height: 100%;
+    height: auto;
 }
 
 .pTS-svg-node {
@@ -193,25 +227,92 @@ export const style = `
     filter: brightness(1.2);
 }
 
-.pTS-svg-node.pTS-selected rect {
-    stroke: #00e5ff !important;
-    stroke-width: 2.5px !important;
-}
-
 .pTS-svg-node.pTS-active-glow {
-    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 16px rgba(0, 229, 255, 0.8)) !important;
+    filter: drop-shadow(0 0 5px rgba(113, 255, 157, 0.65));
 }
 
 .pTS-svg-node.pTS-active-glow rect {
-    stroke: #ffffff !important;
-    stroke-width: 2.5px !important;
-    animation: pTS-node-pulse 1.4s infinite ease-in-out;
+    stroke: #71ff9d;
+    stroke-width: 2.5px;
 }
 
-@keyframes pTS-node-pulse {
-    0% { stroke: #ffffff; }
-    50% { stroke: #00e5ff; }
-    100% { stroke: #ffffff; }
+.pTS-svg-node.pTS-active-ancestor rect {
+    stroke: #e4c56e;
+    stroke-dasharray: 5 3;
+}
+
+.pTS-svg-node.pTS-selected rect {
+    stroke: #00e5ff;
+    stroke-width: 3px;
+}
+
+.pTS-svg-node.pTS-selected text {
+    fill: #7df4ff;
+}
+
+.pTS-svg-transition {
+    cursor: pointer;
+}
+
+.pTS-transition-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 18px;
+    vector-effect: non-scaling-stroke;
+    pointer-events: stroke;
+}
+
+.pTS-transition-arrow {
+    fill: none;
+    stroke: #cbd5e1;
+    stroke-width: 1.5px;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
+
+.pTS-svg-transition:hover .pTS-transition-arrow {
+    stroke: #fff1a8;
+    stroke-width: 3px;
+    marker-end: var(--pTS-arrow-hover);
+}
+
+.pTS-svg-transition.pTS-selected .pTS-transition-arrow {
+    stroke: #00e5ff;
+    stroke-width: 3px;
+    marker-end: var(--pTS-arrow-selected);
+}
+
+#pTS-transition-details-card {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+}
+.pTS-transition-summary {
+    font-weight: bold;
+    font-size: 13px;
+    color: #ffffff;
+    letter-spacing: 0.5px;
+    overflow-wrap: anywhere;
+}
+
+.pTS-condition-note {
+    font-size: 11px;
+    line-height: 1.5;
+    opacity: 0.8;
+    overflow-wrap: anywhere;
+}
+
+.pTS-transition-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.pTS-transition-property-children {
+    border-left: 1px solid #465363;
+    padding-left: 12px;
+    margin-left: 6px;
 }
 
 #pTS-state-details-card {
@@ -366,24 +467,12 @@ export const template = `
             <span>Weight</span>
             <ui-num-input id="pTS-layer-weight" min="0" max="1" step="0.05" disabled></ui-num-input>
         </div>
-        <div class="pTS-canvas-viewport" id="pTS-graph-canvas-container">
-            <svg class="pTS-graph-svg" id="pTS-canvas-svg">
-                <defs id="pTS-svg-defs">
-                    <marker id="pTS-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffffff" opacity="0.85" />
-                    </marker>
-                    <filter id="pTS-glow-filter" x="-20%" y="-20%" width="140%" height="140%">
-                        <feGaussianBlur stdDeviation="5" result="blur" />
-                        <feMerge>
-                            <feMergeNode in="blur" />
-                            <feMergeNode in="SourceGraphic" />
-                        </feMerge>
-                    </filter>
-                </defs>
-                <g id="pTS-svg-transitions"></g>
-                <g id="pTS-svg-nodes"></g>
-            </svg>
-        </div>
+        <div class="pTS-canvas-viewport" id="pTS-graph-canvas-container"></div>
+    </div>
+
+    <div class="pTS-section-box" id="pTS-transition-details-card">
+        <div class="pTS-state-header-title">Transition conditions · Read only</div>
+        <div id="pTS-transition-details-content"></div>
     </div>
 
     <!-- Section 3: Selected State Details Card (Hidden if no state selected) -->
@@ -413,6 +502,7 @@ export interface pTS_IPanelContext {
 }
 
 const pTS_views = new WeakMap<HTMLElement, pTS_AnimGraphView>();
+let pTS_nextViewId = 0;
 
 function pTS_getHost(context: unknown): HTMLElement | null {
     if (!context || typeof context !== 'object') return null;
@@ -455,6 +545,8 @@ export class pTS_AnimGraphView {
     private pTS_currentState: pTS_IAnimGraphState | null = null;
     private pTS_selectedLayerIndex = 0;
     private pTS_selectedState: pTS_IStateDump | null = null;
+    private pTS_selectedTransition: { machineId: string; id: string } | null = null;
+    private pTS_transitionDetailsKey = '';
     private pTS_instanceId: string | null = null;
     private pTS_observerId = '';
     private pTS_subscriptionId: number | null = null;
@@ -465,7 +557,16 @@ export class pTS_AnimGraphView {
     private pTS_instancesKey = '';
     private pTS_layersKey = '';
     private pTS_variablesKey = '';
+    private pTS_graphKey = '';
+    private pTS_graphRevision = 0;
+    private readonly pTS_viewId = `${++pTS_nextViewId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    private readonly pTS_graphNodes = new Map<string, { element: SVGGElement; path: string }>();
+    private readonly pTS_graphTransitions = new Map<string, SVGGElement>();
+    private pTS_detailsKey = '';
+    private pTS_detailUpdates: Array<() => void> = [];
+    private pTS_scriptKey = '';
     private pTS_frame: HTMLElement | null = null;
+    private readonly pTS_eventDisposers: Array<() => void> = [];
     private readonly pTS_onHide = () => this.pause();
     private readonly pTS_onShow = () => this.resume();
     private readonly pTS_onDataChanged = (raw: unknown) => {
@@ -477,6 +578,8 @@ export class pTS_AnimGraphView {
     };
 
     constructor(private readonly pTS_panelHost: HTMLElement, private readonly pTS_nativeInspector = true) {
+        const header = pTS_panelHost.querySelector<HTMLElement>('#pTS-asset-header');
+        if (header) header.style.display = pTS_nativeInspector ? 'none' : '';
         Editor.Message.addBroadcastListener('pts-animgraph:data-changed', this.pTS_onDataChanged);
         this.pTS_setupEvents(pTS_panelHost);
         // panel-frame emits non-bubbling show/hide when its hidden attribute changes.
@@ -493,6 +596,7 @@ export class pTS_AnimGraphView {
     }
 
     async update(assetList: Array<{ uuid?: string; name?: string; url?: string; file?: string; importer?: string; type?: string }>) {
+        if (this.pTS_closed) return;
         const asset = assetList.length === 1 ? assetList[0] : null;
         if (!asset?.uuid || !(asset.importer === 'animation-graph' || /\.animgraph$/i.test(asset.file || asset.url || asset.name || '') || asset.type === 'cc.animation.AnimationGraph')) {
             this.pTS_releaseObservation();
@@ -535,6 +639,8 @@ export class pTS_AnimGraphView {
     close() {
         this.pTS_closed = true;
         this.pTS_releaseObservation();
+        for (const dispose of this.pTS_eventDisposers) dispose();
+        this.pTS_eventDisposers.length = 0;
         Editor.Message.removeBroadcastListener('pts-animgraph:data-changed', this.pTS_onDataChanged);
         this.pTS_frame?.removeEventListener('hide', this.pTS_onHide);
         this.pTS_frame?.removeEventListener('show', this.pTS_onShow);
@@ -544,6 +650,9 @@ export class pTS_AnimGraphView {
     private pTS_releaseObservation() {
         ++this.pTS_requestVersion;
         ++this.pTS_scriptVersion;
+        this.pTS_scriptKey = '';
+        this.pTS_selectedState = null;
+        this.pTS_selectedTransition = null;
         if (this.pTS_observerId) {
             Editor.Message.send('pts-animgraph', 'unobserve-animgraph', {
                 observerId: this.pTS_observerId,
@@ -581,31 +690,81 @@ export class pTS_AnimGraphView {
         if (state.uuid !== this.pTS_currentAssetUuid || typeof subscriptionId !== 'number') return;
         if (this.pTS_subscriptionId !== null && subscriptionId !== this.pTS_subscriptionId) return;
         if (this.pTS_instanceId !== null && state.instanceId !== this.pTS_instanceId) return;
+        if (state.instanceId !== this.pTS_instanceId || state.isPreview !== this.pTS_currentState?.isPreview) {
+            this.pTS_selectedState = null;
+            this.pTS_selectedTransition = null;
+        }
         this.pTS_subscriptionId = subscriptionId;
         this.pTS_instanceId = state.instanceId;
         this.pTS_currentState = state;
         this.pTS_currentDump = state.dump || null;
-        if (!state.found) this.pTS_selectedState = null;
+        const selectedId = this.pTS_selectedState?.id;
+        this.pTS_selectedState = state.found ? this.pTS_findState(selectedId) : null;
+        if (!state.found || !this.pTS_findTransition(this.pTS_selectedTransition)) this.pTS_selectedTransition = null;
         this.pTS_renderFullView(this.pTS_panelHost);
     }
 
+    private pTS_findState(id: string | undefined): pTS_IStateDump | null {
+        if (!id) return null;
+        for (const machine of this.pTS_currentDump?.layers[this.pTS_selectedLayerIndex]?.stateMachines || []) {
+            const state = machine.states.find(item => item.id === id);
+            if (state) return state;
+        }
+        return null;
+    }
+
+    private pTS_findTransition(selection: { machineId: string; id: string } | null): { machine: pTS_IStateMachineDump; transition: pTS_ITransitionDump } | null {
+        if (!selection) return null;
+        const machine = this.pTS_currentDump?.layers[this.pTS_selectedLayerIndex]?.stateMachines.find(item => item.id === selection.machineId);
+        const transition = machine?.transitions.find(item => item.id === selection.id);
+        return machine && transition ? { machine, transition } : null;
+    }
+
     private pTS_setupEvents(root: HTMLElement) {
-        root.querySelector('#pTS-edit-button')?.addEventListener('click', () => {
+        const listen = (selector: string, type: string, listener: EventListener) => {
+            const element = root.querySelector(selector);
+            element?.addEventListener(type, listener);
+            this.pTS_eventDisposers.push(() => element?.removeEventListener(type, listener));
+        };
+        listen('#pTS-edit-button', 'click', () => {
             if (this.pTS_currentAssetUuid) Editor.Message.send('asset-db', 'open-asset', this.pTS_currentAssetUuid);
         });
-        root.querySelector('#pTS-layer-select')?.addEventListener('change', (event) => {
+        listen('#pTS-layer-select', 'change', (event) => {
             this.pTS_selectedLayerIndex = Number((event.target as HTMLSelectElement).value);
             this.pTS_selectedState = null;
+            this.pTS_selectedTransition = null;
             this.pTS_renderLayersAndCanvas(root);
             this.pTS_renderStateDetails(root);
+            this.pTS_renderTransitionDetails(root);
         });
-        root.querySelector('#pTS-instance-select')?.addEventListener('change', (event) => {
+        listen('#pTS-instance-select', 'change', (event) => {
             const id = (event.target as HTMLSelectElement).value;
             if (!id || id === this.pTS_instanceId) return;
             this.pTS_instanceId = id;
             void this.pTS_observe();
         });
-        root.querySelector('#pTS-layer-weight')?.addEventListener('confirm', (event) => {
+        listen('#pTS-graph-canvas-container', 'click', (event) => {
+            const target = event.target as Element | null;
+            const edge = target?.closest<SVGGElement>('.pTS-svg-transition');
+            const node = target?.closest<SVGGElement>('.pTS-svg-node');
+            if (edge) {
+                const selection = { machineId: edge.dataset.machineId || '', id: edge.dataset.transitionId || '' };
+                this.pTS_selectedTransition = this.pTS_findTransition(selection) ? selection : null;
+                this.pTS_selectedState = null;
+            } else if (node) {
+                this.pTS_selectedState = this.pTS_findState(node.dataset.stateId);
+                this.pTS_selectedTransition = null;
+            } else if (target?.closest('.pTS-machine-header')) {
+                return;
+            } else {
+                this.pTS_selectedState = null;
+                this.pTS_selectedTransition = null;
+            }
+            this.pTS_patchGraphState();
+            this.pTS_renderStateDetails(root);
+            this.pTS_renderTransitionDetails(root);
+        });
+        listen('#pTS-layer-weight', 'confirm', (event) => {
             if (!this.pTS_currentState?.found || !this.pTS_instanceId || this.pTS_subscriptionId === null) return;
             const weight = Number((event.target as HTMLInputElement).value);
             if (!Number.isFinite(weight) || weight < 0 || weight > 1) return;
@@ -622,7 +781,7 @@ export class pTS_AnimGraphView {
 
     private pTS_renderFullView(root: HTMLElement) {
         const nameText = root.querySelector('#pTS-asset-name-text');
-        if (nameText) nameText.textContent = this.pTS_currentAssetName || this.pTS_currentDump?.name || 'Animation Graph';
+        this.pTS_setText(nameText, this.pTS_currentAssetName || this.pTS_currentDump?.name || 'Animation Graph');
         const preview = !!this.pTS_currentState?.isPreview;
         // Native Inspector keeps its built-in Edit section as the sole authoring UI.
         root.style.display = this.pTS_nativeInspector && !preview ? 'none' : 'flex';
@@ -633,6 +792,10 @@ export class pTS_AnimGraphView {
             if (element) element.style.display = preview ? '' : 'none';
         }
         if (!preview) {
+            this.pTS_selectedState = null;
+            this.pTS_selectedTransition = null;
+            this.pTS_renderTransitionDetails(root);
+            this.pTS_clearDetails();
             root.querySelector<HTMLElement>('#pTS-state-details-card')!.style.display = 'none';
             root.querySelector<HTMLElement>('#pTS-script-code-panel')!.style.display = 'none';
             return;
@@ -642,6 +805,7 @@ export class pTS_AnimGraphView {
         this.pTS_renderVariables(root);
         this.pTS_renderLayersAndCanvas(root);
         this.pTS_renderStateDetails(root);
+        this.pTS_renderTransitionDetails(root);
     }
 
     private pTS_renderInstances(root: HTMLElement) {
@@ -687,105 +851,88 @@ private pTS_renderBanner(root: HTMLElement) {
 
     banner.style.display = 'flex';
     if (this.pTS_currentState.found) {
-        banner.className = '';
-        statusText.textContent = '🟢 Live Preview Mode (Runtime Instance Linked)';
+        banner.classList.remove('pTS-waiting');
+        this.pTS_setText(statusText, '🟢 Live Preview Mode (Runtime Instance Linked)');
         const nodePath = this.pTS_currentState.activeNode?.path || this.pTS_currentState.activeNode?.name || 'Active Node';
         const cls = this.pTS_currentState.controllerClass || 'AnimationController';
-        subText.textContent = `Controller: ${nodePath} (${cls})`;
+        this.pTS_setText(subText, `Controller: ${nodePath} (${cls})`);
     } else {
-        banner.className = 'pTS-waiting';
-        statusText.textContent = '🟠 Live Preview Mode';
-        subText.textContent = 'Waiting for runtime AnimationController...';
+        banner.classList.add('pTS-waiting');
+        this.pTS_setText(statusText, '🟠 Live Preview Mode');
+        this.pTS_setText(subText, 'Waiting for runtime AnimationController...');
     }
 }
 
+private pTS_setText(element: Element | null, text: string) {
+    if (element && element.textContent !== text) element.textContent = text;
+}
+
+private pTS_addElement(parent: HTMLElement, tag: string, className = '', text?: string): HTMLElement {
+    const element = parent.ownerDocument.createElement(tag);
+    if (className) element.className = className;
+    if (text !== undefined) element.textContent = text;
+    parent.appendChild(element);
+    return element;
+}
+
+private pTS_valueText(value: unknown): string {
+    if (value && typeof value === 'object') return JSON.stringify(value);
+    return String(value ?? '');
+}
+
+private pTS_setWidget(element: HTMLElement, value: unknown) {
+    // Creator widgets host their editable input in a shadow root. Do not overwrite an in-progress edit.
+    if (element.matches(':focus-within')) return;
+    const widget = element as HTMLElement & { value: unknown; checked?: boolean };
+    if (String(widget.value) !== String(value ?? '')) widget.value = value ?? '';
+    if (element.tagName === 'UI-CHECKBOX' && widget.checked !== (value === true)) widget.checked = value === true;
+}
+
 private pTS_renderVariables(root: HTMLElement) {
-    const container = root.querySelector('#pTS-variables-container') as HTMLElement | null;
+    const container = root.querySelector<HTMLElement>('#pTS-variables-container');
     if (!container) return;
-
-    const varsToRender = this.pTS_currentState?.found ? this.pTS_currentState.variables || [] : [];
-    const envelope = {
-        observerId: this.pTS_observerId,
-        uuid: this.pTS_currentAssetUuid,
-        subscriptionId: this.pTS_subscriptionId,
-        instanceId: this.pTS_instanceId,
-    };
-    const key = JSON.stringify([varsToRender, envelope]);
-    if (key === this.pTS_variablesKey) return;
-    this.pTS_variablesKey = key;
-    const sendVariable = (name: string, value: unknown) => {
-        if (!this.pTS_currentState?.found || !envelope.instanceId || envelope.subscriptionId === null ||
-            envelope.observerId !== this.pTS_observerId || envelope.instanceId !== this.pTS_instanceId ||
-            envelope.subscriptionId !== this.pTS_subscriptionId) return;
-        Editor.Message.send('pts-animgraph', 'set-animgraph-variable', { ...envelope, name, value });
-    };
-
-    if (!varsToRender || varsToRender.length === 0) {
-        container.innerHTML = '<span style="opacity: 0.6; font-size: 11px;">No live variables available</span>';
-        return;
-    }
-
-    let html = '';
-    for (const v of varsToRender) {
-        const isLive = !!(this.pTS_currentState && this.pTS_currentState.found);
-        html += `<div class="pTS-var-row" data-name="${v.name}">
-            <span class="pTS-var-name" title="${v.name}">${v.name}</span>
-            <div class="pTS-var-widget">`;
-
-        if (v.isTrigger) {
-            html += `<ui-button class="pTS-trigger-btn" style="width: 100%; font-size: 11px;" ${isLive ? '' : 'disabled'}>Fire Trigger</ui-button>`;
-        } else if (v.type === 1) {
-            html += `<ui-checkbox class="pTS-bool-widget" value="${v.value === true}" ${isLive ? '' : 'disabled'}></ui-checkbox>`;
-        } else if (v.type === 0 || v.type === 3) {
-            const step = v.type === 3 ? '1' : '0.1';
-            html += `<ui-num-input class="pTS-num-widget" value="${v.value ?? 0}" step="${step}" ${isLive ? '' : 'disabled'}></ui-num-input>`;
-        } else {
-            html += '<span style="font-size:11px;opacity:0.7;">Read-only runtime value</span>';
-        }
-
-        html += `</div></div>`;
-        if (v.isTrigger) {
-            html += `<div class="pTS-var-row" style="margin-top:-2px;margin-bottom:2px;">
-                <span class="pTS-var-name" style="font-size:10px;opacity:0.6;margin-left:8px;">Reset on next frame</span>
-                <ui-checkbox checked disabled style="transform:scale(0.85);"></ui-checkbox>
-            </div>`;
+    const variables = this.pTS_currentState?.found ? this.pTS_currentState.variables || [] : [];
+    // Values and observation envelopes are not part of the control schema.
+    const key = JSON.stringify(variables.map(variable => [variable.name, variable.type, variable.isTrigger]));
+    if (key !== this.pTS_variablesKey) {
+        this.pTS_variablesKey = key;
+        container.replaceChildren();
+        if (!variables.length) this.pTS_addElement(container, 'span', '', 'No live variables available');
+        for (const variable of variables) {
+            const row = this.pTS_addElement(container, 'div', 'pTS-var-row');
+            row.dataset.name = variable.name;
+            this.pTS_addElement(row, 'span', 'pTS-var-name', variable.name).title = variable.name;
+            const holder = this.pTS_addElement(row, 'div', 'pTS-var-widget');
+            const tag = variable.isTrigger ? 'ui-button' : variable.type === 1 ? 'ui-checkbox'
+                : variable.type === 0 || variable.type === 3 ? 'ui-num-input' : 'span';
+            const widget = this.pTS_addElement(holder, tag, 'pTS-variable-value');
+            if (variable.isTrigger) {
+                widget.textContent = 'Fire Trigger';
+                widget.title = 'Trigger resets on the next frame';
+            } else if (tag === 'ui-num-input') {
+                widget.setAttribute('step', variable.type === 3 ? '1' : '0.1');
+            }
+            if (tag !== 'span') {
+                widget.addEventListener(variable.isTrigger ? 'click' : variable.type === 1 ? 'change' : 'confirm', () => {
+                    if (this.pTS_closed || !this.pTS_currentState?.found || !this.pTS_instanceId || this.pTS_subscriptionId === null) return;
+                    const input = widget as HTMLElement & { value: unknown; checked?: boolean };
+                    const value = variable.isTrigger ? true : variable.type === 1
+                        ? input.value === true || input.checked === true : Number(input.value);
+                    if (typeof value === 'number' && !Number.isFinite(value)) return;
+                    Editor.Message.send('pts-animgraph', 'set-animgraph-variable', {
+                        observerId: this.pTS_observerId, uuid: this.pTS_currentAssetUuid,
+                        subscriptionId: this.pTS_subscriptionId, instanceId: this.pTS_instanceId,
+                        name: variable.name, value,
+                    });
+                });
+            }
         }
     }
-    container.innerHTML = html;
-
-    container.querySelectorAll('.pTS-trigger-btn').forEach((btn: Element) => {
-        btn.addEventListener('click', (e: Event) => {
-            const target = e.target as HTMLElement | null;
-            const row = target?.closest('.pTS-var-row') as HTMLElement | null;
-            const name = row?.dataset.name;
-            if (name && this.pTS_currentAssetUuid) {
-                sendVariable(name, true);
-            }
-        });
-    });
-
-    container.querySelectorAll('.pTS-bool-widget').forEach((chk: Element) => {
-        chk.addEventListener('change', (e: Event) => {
-            const target = e.target as (HTMLElement & { value?: boolean; checked?: boolean }) | null;
-            const row = target?.closest('.pTS-var-row') as HTMLElement | null;
-            const name = row?.dataset.name;
-            const val = target?.value === true || target?.checked === true;
-            if (name && this.pTS_currentAssetUuid) {
-                sendVariable(name, val);
-            }
-        });
-    });
-
-    container.querySelectorAll('.pTS-num-widget').forEach((num: Element) => {
-        num.addEventListener('confirm', (e: Event) => {
-            const target = e.target as HTMLInputElement | null;
-            const row = target?.closest('.pTS-var-row') as HTMLElement | null;
-            const name = row?.dataset.name;
-            const val = parseFloat(target?.value ?? '0');
-            if (name && !isNaN(val) && this.pTS_currentAssetUuid) {
-                sendVariable(name, val);
-            }
-        });
+    variables.forEach((variable, index) => {
+        const widget = container.children[index]?.querySelector<HTMLElement>('.pTS-variable-value');
+        if (!widget || variable.isTrigger) return;
+        if (widget.tagName === 'SPAN') this.pTS_setText(widget, this.pTS_valueText(variable.value));
+        else this.pTS_setWidget(widget, variable.value);
     });
 }
 
@@ -806,280 +953,446 @@ private pTS_renderLayersAndCanvas(root: HTMLElement) {
             });
         }
         if (this.pTS_selectedLayerIndex >= layers.length) this.pTS_selectedLayerIndex = 0;
-        layerSelect.value = String(this.pTS_selectedLayerIndex);
+        if (layerSelect.value !== String(this.pTS_selectedLayerIndex)) layerSelect.value = String(this.pTS_selectedLayerIndex);
         layerSelect.disabled = layers.length === 0;
     }
-    const weightInput = root.querySelector<HTMLInputElement>('#pTS-layer-weight');
+    const weightInput = root.querySelector<HTMLElement>('#pTS-layer-weight');
     if (weightInput) {
         const layer = this.pTS_currentState?.found
-            ? this.pTS_currentState.layers?.find(item => item.index === this.pTS_selectedLayerIndex) : undefined;
+            ? this.pTS_currentState.layers?.find(item => item.index === layers[this.pTS_selectedLayerIndex]?.index) : undefined;
         weightInput.toggleAttribute('disabled', !layer);
-        if (layer) weightInput.value = String(layer.weight);
+        if (layer) this.pTS_setWidget(weightInput, layer.weight);
     }
-    if (!layers.length) {
-        root.querySelector('#pTS-svg-transitions')?.replaceChildren();
-        root.querySelector('#pTS-svg-nodes')?.replaceChildren();
-        return;
+    const layer = layers[this.pTS_selectedLayerIndex];
+    // Only authored graph geometry/identity can replace graph DOM, never progress or live props.
+    const key = JSON.stringify([this.pTS_currentAssetUuid, layer?.index, layer?.stateMachineId,
+        layer?.stateMachines.map(machine => [machine.id, machine.name, machine.path,
+            machine.states.map(state => [state.id, state.name, state.path, state.type, state.stateMachineId, state.centerX, state.centerY]),
+            machine.transitions.map(transition => [transition.id, transition.from, transition.to])])]);
+    if (key !== this.pTS_graphKey) {
+        this.pTS_graphKey = key;
+        this.pTS_graphNodes.clear();
+        this.pTS_graphTransitions.clear();
+        const container = root.querySelector<HTMLElement>('#pTS-graph-canvas-container');
+        if (container) {
+            container.replaceChildren();
+            if (layer) {
+                ++this.pTS_graphRevision;
+                const machines = [...layer.stateMachines].sort((a, b) => {
+                    if (a.id === layer.stateMachineId) return -1;
+                    if (b.id === layer.stateMachineId) return 1;
+                    return a.path.localeCompare(b.path);
+                });
+                machines.forEach((machine, index) => this.pTS_renderMachine(container, layer, machine, index));
+            } else {
+                this.pTS_addElement(container, 'span', '', 'No state machines available');
+            }
+        }
     }
-    this.pTS_renderGraphSvg(root, layers[this.pTS_selectedLayerIndex]);
+    this.pTS_patchGraphState();
 }
 
-private pTS_renderGraphSvg(root: HTMLElement, layer: pTS_ILayerDump) {
-    const transitionsGroup = root.querySelector('#pTS-svg-transitions') as SVGGElement | null;
-    const nodesGroup = root.querySelector('#pTS-svg-nodes') as SVGGElement | null;
-    const svgElem = root.querySelector('#pTS-canvas-svg') as SVGSVGElement | null;
-    if (!transitionsGroup || !nodesGroup || !svgElem) return;
-
-    const states = layer.states || [];
-    const transitions = layer.transitions || [];
-
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    states.forEach(st => {
-        const x = st.centerX;
-        const y = st.centerY;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-    });
-
-    if (minX === Infinity) { minX = 0; maxX = 400; minY = 0; maxY = 250; }
-    const padding = 60;
-    const boxW = Math.max(350, (maxX - minX) + padding * 2);
-    const boxH = Math.max(220, (maxY - minY) + padding * 2);
-    const viewLeft = minX - padding;
-    const viewTop = minY - padding;
-
-    svgElem.setAttribute('viewBox', `${viewLeft} ${viewTop} ${boxW} ${boxH}`);
-
-    const statePosMap = new Map<string, { x: number; y: number }>();
-    states.forEach(st => {
-        statePosMap.set(st.name, { x: st.centerX, y: st.centerY });
-    });
-
-    let transitionsHtml = '';
-    transitions.forEach(tr => {
-        const fromPos = statePosMap.get(tr.from);
-        const toPos = statePosMap.get(tr.to);
-        if (fromPos && toPos) {
-            const dx = toPos.x - fromPos.x;
-            const dy = toPos.y - fromPos.y;
-            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            const offset = 32;
-            const startX = fromPos.x + (dx / dist) * offset;
-            const startY = fromPos.y + (dy / dist) * offset;
-            const endX = toPos.x - (dx / dist) * offset;
-            const endY = toPos.y - (dy / dist) * offset;
-
-            transitionsHtml += `<path d="M ${startX} ${startY} L ${endX} ${endY}" stroke="#ffffff" stroke-width="2" opacity="0.85" marker-end="url(#pTS-arrow)" />`;
-        }
-    });
-    transitionsGroup.innerHTML = transitionsHtml;
-
-    let liveActivePath = '';
-    if (this.pTS_currentState && this.pTS_currentState.found && this.pTS_currentState.layers) {
-        const liveLayer = this.pTS_currentState.layers.find(l => l.index === layer.index);
-        if (liveLayer && liveLayer.activeStatePath) {
-            liveActivePath = liveLayer.activeStatePath;
-        }
-    }
-
-    let nodesHtml = '';
-    states.forEach(st => {
-        const isSelected = this.pTS_selectedState && (this.pTS_selectedState.name === st.name || this.pTS_selectedState.id === st.id);
-        const isActiveState = liveActivePath && (liveActivePath === st.path || liveActivePath.endsWith('/' + st.name));
-
-        let fillColor = '#1a365d';
-        let strokeColor = '#2b6cb0';
-        if (st.type === 'Entry') { fillColor = '#1b5e20'; strokeColor = '#4caf50'; }
-        else if (st.type === 'Exit') { fillColor = '#b71c1c'; strokeColor = '#f44336'; }
-        else if (st.type === 'Any') { fillColor = '#4a148c'; strokeColor = '#ab47bc'; }
-        else if (st.type === 'SubStateMachine') { fillColor = '#0f2b48'; strokeColor = '#00bcd4'; }
-
-        const w = 76;
-        const h = 28;
-        const rx = 4;
-        const x = st.centerX - w / 2;
-        const y = st.centerY - h / 2;
-
-        let nodeCls = 'pTS-svg-node';
-        if (isSelected) nodeCls += ' pTS-selected';
-        if (isActiveState) nodeCls += ' pTS-active-glow';
-
-        nodesHtml += `<g class="${nodeCls}" data-name="${st.name}" transform="translate(${x}, ${y})">
-            <rect width="${w}" height="${h}" rx="${rx}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1.5" />
-            <text x="${w / 2}" y="${h / 2 + 4}" fill="#ffffff" font-size="11" font-weight="600" text-anchor="middle" pointer-events="none">${st.name}</text>
-        </g>`;
-    });
-    nodesGroup.innerHTML = nodesHtml;
-
-    nodesGroup.querySelectorAll('.pTS-svg-node').forEach((nodeElem: Element) => {
-        nodeElem.addEventListener('click', (e: Event) => {
-            e.stopPropagation();
-            const target = nodeElem as SVGGElement;
-            const stateName = target.dataset.name;
-            const targetState = states.find(s => s.name === stateName);
-            if (targetState) {
-                this.pTS_selectedState = targetState;
-                this.pTS_renderLayersAndCanvas(root);
-                this.pTS_renderStateDetails(root);
-            }
+private pTS_renderMachine(container: HTMLElement, layer: pTS_ILayerDump, machine: pTS_IStateMachineDump, index: number) {
+    const card = this.pTS_addElement(container, 'section', 'pTS-machine-card');
+    card.dataset.machineId = machine.id;
+    card.dataset.machinePath = machine.path;
+    const header = this.pTS_addElement(card, 'div', 'pTS-machine-header');
+    card.title = 'Automatically centered overview';
+    this.pTS_addElement(header, 'span', '',
+        `${machine.id === layer.stateMachineId ? 'Root' : 'Nested'} state machine: ${machine.name}`);
+    this.pTS_addElement(header, 'span', 'pTS-machine-path', machine.path.split('/').join(' › '));
+    const viewport = this.pTS_addElement(card, 'div', 'pTS-machine-viewport');
+    const namespace = 'http://www.w3.org/2000/svg';
+    const svg = container.ownerDocument.createElementNS(namespace, 'svg');
+    svg.setAttribute('class', 'pTS-graph-svg');
+    svg.setAttribute('aria-label', `State machine ${machine.path}`);
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    viewport.appendChild(svg);
+    const addSvg = (parent: Element, tag: string, attrs: Record<string, string>) => {
+        const element = container.ownerDocument.createElementNS(namespace, tag);
+        for (const [name, value] of Object.entries(attrs)) element.setAttribute(name, value);
+        parent.appendChild(element);
+        return element;
+    };
+    const markerId = `pTS-arrow-${this.pTS_viewId}-${this.pTS_graphRevision}-${index}`;
+    const defs = addSvg(svg, 'defs', {});
+    for (const [suffix, color] of [['', '#cbd5e1'], ['-hover', '#fff1a8'], ['-selected', '#00e5ff']]) {
+        const marker = addSvg(defs, 'marker', {
+            id: `${markerId}${suffix}`, viewBox: '0 0 10 10', refX: '10', refY: '5', markerWidth: '6', markerHeight: '6', orient: 'auto',
         });
-    });
-
-    const canvasViewport = root.querySelector('#pTS-graph-canvas-container') as HTMLElement | null;
-    if (canvasViewport) {
-        canvasViewport.onclick = (e: MouseEvent) => {
-            const target = e.target as Element | null;
-            if (target === svgElem || target?.tagName.toLowerCase() === 'svg' || target?.id === 'pTS-graph-canvas-container') {
-                this.pTS_selectedState = null;
-                this.pTS_renderLayersAndCanvas(root);
-                this.pTS_renderStateDetails(root);
-            }
-        };
+        addSvg(marker, 'path', { d: 'M 0 0 L 10 5 L 0 10 z', fill: color });
     }
+    const positions = new Map(machine.states.map(state => [state.id, {
+        x: state.centerX, y: state.centerY, width: Math.max(88, Math.min(200, state.name.length * 7 + 24)), height: 34,
+    }]));
+    const bounds = [...positions.values()];
+    // Coincident authored nodes cannot be separated by scaling; fan out only their display copies.
+    const authoredPositions = new Set(bounds.map(position => `${position.x},${position.y}`));
+    const displayedPositions = new Set<string>();
+    for (const position of bounds) {
+        const key = `${position.x},${position.y}`;
+        if (displayedPositions.has(key)) {
+            do { position.y += position.height + 28; }
+            while (authoredPositions.has(`${position.x},${position.y}`) || displayedPositions.has(`${position.x},${position.y}`));
+        }
+        displayedPositions.add(`${position.x},${position.y}`);
+    }
+    // Compress unused coordinate gaps, retaining authored ordering within each local machine.
+    // These are view copies only; the graph asset and its editor positions are untouched.
+    for (const axis of ['x', 'y'] as const) {
+        const coordinates = [...new Set(bounds.map(position => position[axis]))].sort((a, b) => a - b);
+        const compact = new Map<number, number>();
+        let previous = coordinates[0] || 0;
+        let offset = 0;
+        for (const coordinate of coordinates) {
+            offset += Math.min(coordinate - previous, axis === 'x' ? 96 : 72);
+            compact.set(coordinate, offset);
+            previous = coordinate;
+        }
+        for (const position of bounds) position[axis] = compact.get(position[axis])!;
+    }
+    // Expand only enough to prevent node overlap after compaction.
+    let spacing = 1;
+    for (let a = 0; a < bounds.length; ++a) {
+        for (let b = a + 1; b < bounds.length; ++b) {
+            const dx = Math.abs(bounds[a].x - bounds[b].x);
+            const dy = Math.abs(bounds[a].y - bounds[b].y);
+            if (dx || dy) spacing = Math.max(spacing, Math.min(
+                dx ? ((bounds[a].width + bounds[b].width) / 2 + 12) / dx : Infinity,
+                dy ? ((bounds[a].height + bounds[b].height) / 2 + 12) / dy : Infinity,
+            ));
+        }
+    }
+    for (const position of bounds) {
+        position.x *= spacing;
+        position.y *= spacing;
+    }
+    const lanes = new Map<string, number>();
+    let padding = 28;
+    for (const transition of machine.transitions) {
+        const key = JSON.stringify([transition.from, transition.to]);
+        const lane = lanes.get(key) || 0;
+        lanes.set(key, lane + 1);
+        padding = Math.max(padding, (transition.from === transition.to ? 65 : 24) + lane * 18 + 12);
+    }
+    lanes.clear();
+    const left = bounds.length ? Math.min(...bounds.map(item => item.x - item.width / 2)) - padding : 0;
+    const top = bounds.length ? Math.min(...bounds.map(item => item.y - item.height / 2)) - padding : 0;
+    const width = Math.max(260, bounds.length ? Math.max(...bounds.map(item => item.x + item.width / 2)) + padding - left : 260);
+    const height = Math.max(180, bounds.length ? Math.max(...bounds.map(item => item.y + item.height / 2)) + padding - top : 180);
+    svg.setAttribute('viewBox', `${left} ${top} ${width} ${height}`);
+    svg.setAttribute('width', String(width));
+    svg.setAttribute('height', String(height));
+    const transitions = addSvg(svg, 'g', { class: 'pTS-svg-transitions' });
+    for (const transition of machine.transitions) {
+        const from = positions.get(transition.from);
+        const to = positions.get(transition.to);
+        if (!from || !to) continue;
+        const laneKey = JSON.stringify([transition.from, transition.to]);
+        const lane = lanes.get(laneKey) || 0;
+        lanes.set(laneKey, lane + 1);
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const distance = Math.hypot(dx, dy);
+        let path: string;
+        if (transition.from === transition.to || distance < 1) {
+            const lift = 65 + lane * 18;
+            path = `M ${from.x - from.width / 4} ${from.y - from.height / 2} C ${from.x - from.width / 2 - lift} ${from.y - lift}, ${to.x + to.width / 2 + lift} ${to.y - lift}, ${to.x + to.width / 4} ${to.y - to.height / 2}`;
+        } else {
+            const bend = 24 + lane * 18;
+            const cx = (from.x + to.x) / 2 - dy / distance * bend;
+            const cy = (from.y + to.y) / 2 + dx / distance * bend;
+            const border = (position: { x: number; y: number; width: number; height: number }, x: number, y: number) => {
+                const scale = 1 / Math.max(Math.abs(x - position.x) / (position.width / 2), Math.abs(y - position.y) / (position.height / 2));
+                return { x: position.x + (x - position.x) * scale, y: position.y + (y - position.y) * scale };
+            };
+            const start = border(from, cx, cy);
+            const end = border(to, cx, cy);
+            path = `M ${start.x} ${start.y} Q ${cx} ${cy} ${end.x} ${end.y}`;
+        }
+        const edge = addSvg(transitions, 'g', {
+            class: 'pTS-svg-transition', 'data-machine-id': machine.id, 'data-transition-id': transition.id,
+            'data-from': transition.from, 'data-to': transition.to,
+        }) as SVGGElement;
+        edge.style.setProperty('--pTS-arrow-hover', `url(#${markerId}-hover)`);
+        edge.style.setProperty('--pTS-arrow-selected', `url(#${markerId}-selected)`);
+        const sourceName = machine.states.find(state => state.id === transition.from)?.name || transition.from;
+        const destinationName = machine.states.find(state => state.id === transition.to)?.name || transition.to;
+        addSvg(edge, 'title', {}).textContent = `${sourceName} → ${destinationName}\n${transition.type}\n${transition.id}`;
+        addSvg(edge, 'path', { class: 'pTS-transition-hit', d: path });
+        addSvg(edge, 'path', { class: 'pTS-transition-arrow', d: path, 'marker-end': `url(#${markerId})` });
+        this.pTS_graphTransitions.set(JSON.stringify([machine.id, transition.id]), edge);
+    }
+    const nodes = addSvg(svg, 'g', { class: 'pTS-svg-nodes' });
+    for (const state of machine.states) {
+        const position = positions.get(state.id)!;
+        const node = addSvg(nodes, 'g', {
+            class: 'pTS-svg-node', 'data-state-id': state.id, 'data-state-path': state.path,
+            transform: `translate(${position.x - position.width / 2}, ${position.y - position.height / 2})`,
+        }) as SVGGElement;
+        const colors: Record<string, [string, string]> = {
+            Entry: ['#1b5e20', '#4caf50'], Exit: ['#651b1b', '#f44336'],
+            Any: ['#4a148c', '#ab47bc'], SubStateMachine: ['#0f2b48', '#00bcd4'],
+        };
+        const [fill, stroke] = colors[state.type] || ['#1a365d', '#4a7cb8'];
+        addSvg(node, 'title', {}).textContent = `${state.name} (${state.type})\n${state.path}`;
+        addSvg(node, 'rect', {
+            width: String(position.width), height: String(position.height), rx: '5', fill, stroke, 'stroke-width': '1.5',
+        });
+        addSvg(node, 'text', {
+            x: String(position.width / 2), y: '21', fill: '#fff', 'font-size': '12',
+            'font-weight': '600', 'text-anchor': 'middle', 'pointer-events': 'none',
+        }).textContent = state.name.length > 25 ? `${state.name.slice(0, 24)}…` : state.name;
+        this.pTS_graphNodes.set(state.id, { element: node, path: state.path });
+    }
+    if (!machine.states.length) addSvg(svg, 'text', { x: '20', y: '40', fill: '#aaa', 'font-size': '12' }).textContent = 'No local states';
+}
+
+private pTS_patchGraphState() {
+    const layer = this.pTS_currentDump?.layers[this.pTS_selectedLayerIndex];
+    const activePath = this.pTS_currentState?.found
+        ? this.pTS_currentState.layers?.find(item => item.index === layer?.index)?.activeStatePath || '' : '';
+    for (const [id, node] of this.pTS_graphNodes) {
+        const flags: Record<string, boolean> = {
+            'pTS-selected': id === this.pTS_selectedState?.id,
+            'pTS-active-glow': !!activePath && activePath === node.path,
+            'pTS-active-ancestor': !!activePath && !!node.path && activePath.startsWith(`${node.path}/`),
+        };
+        for (const [name, enabled] of Object.entries(flags)) {
+            if (node.element.classList.contains(name) !== enabled) node.element.classList.toggle(name, enabled);
+        }
+    }
+    const selectedEdgeKey = this.pTS_selectedTransition
+        ? JSON.stringify([this.pTS_selectedTransition.machineId, this.pTS_selectedTransition.id]) : '';
+    for (const [key, element] of this.pTS_graphTransitions) {
+        const selected = key === selectedEdgeKey;
+        if (element.classList.contains('pTS-selected') !== selected) element.classList.toggle('pTS-selected', selected);
+    }
+}
+
+private pTS_renderTransitionDetails(root: HTMLElement) {
+    const card = root.querySelector<HTMLElement>('#pTS-transition-details-card');
+    const content = root.querySelector<HTMLElement>('#pTS-transition-details-content');
+    if (!card || !content) return;
+    const selected = this.pTS_findTransition(this.pTS_selectedTransition);
+    if (!selected) {
+        this.pTS_transitionDetailsKey = '';
+        if (card.style.display !== 'none') card.style.display = 'none';
+        if (card.dataset.transitionId !== undefined) delete card.dataset.transitionId;
+        if (card.dataset.machineId !== undefined) delete card.dataset.machineId;
+        return;
+    }
+    const { machine, transition } = selected;
+    const source = machine.states.find(state => state.id === transition.from);
+    const destination = machine.states.find(state => state.id === transition.to);
+    if (card.style.display !== 'flex') card.style.display = 'flex';
+    if (card.dataset.transitionId !== transition.id) card.dataset.transitionId = transition.id;
+    if (card.dataset.machineId !== machine.id) card.dataset.machineId = machine.id;
+    // Authored data only: progress pushes must not rebuild the panel or reset its scroll/selection.
+    const key = JSON.stringify([this.pTS_currentAssetUuid, this.pTS_selectedLayerIndex, machine.id, machine.path,
+        transition, source?.name, destination?.name]);
+    if (key === this.pTS_transitionDetailsKey) return;
+    this.pTS_transitionDetailsKey = key;
+    content.replaceChildren();
+    const arrowTitle = `${source?.name || transition.from} ────────► ${destination?.name || transition.to}`;
+    const summary = this.pTS_addElement(content, 'div', 'pTS-transition-summary', arrowTitle);
+    summary.dataset.field = 'endpoints';
+    const metaCard = this.pTS_addElement(content, 'div', 'pTS-sub-card');
+    const metaRow = this.pTS_addElement(metaCard, 'div', 'pTS-prop-row');
+    metaRow.dataset.property = 'machine';
+    this.pTS_addElement(metaRow, 'span', 'pTS-prop-label', 'Machine').title = 'machine';
+    const metaHolder = this.pTS_addElement(metaRow, 'div', 'pTS-prop-val');
+    const metaInput = this.pTS_addElement(metaHolder, 'ui-input');
+    metaInput.setAttribute('disabled', '');
+    this.pTS_setWidget(metaInput, machine.path);
+    const configuration = this.pTS_addElement(content, 'div', 'pTS-sub-card');
+    configuration.dataset.fields = 'transition';
+    this.pTS_addElement(configuration, 'div', 'pTS-sub-title', 'Configured transition fields');
+    this.pTS_renderTransitionProperties(configuration, { duration: transition.duration, ...transition.properties });
+    this.pTS_addElement(content, 'div', 'pTS-condition-note', transition.hasExitCondition
+        ? 'Exit gating enabled: animation source exit time must also be reached; see the configured exit threshold above.'
+        : 'Exit gating disabled: no animation exit-time gate.').dataset.field = 'exit-gating';
+    const conditions = transition.conditions;
+    const heading = this.pTS_addElement(content, 'div', 'pTS-sub-title',
+        conditions.length ? `Conditions (${conditions.length}) · AND — all must pass` : 'Conditions (0)');
+    heading.dataset.field = 'conditions-summary';
+    if (!conditions.length) {
+        const entryOrExit = source?.type === 'Entry' || source?.type === 'Exit';
+        this.pTS_addElement(content, 'div', 'pTS-condition-note', entryOrExit
+            ? 'No conditions configured. Entry/Exit transitions can be taken without conditions.'
+            : transition.hasExitCondition
+                ? 'No conditions configured. Eligibility depends on the enabled exit gate, not an unconditional match.'
+                : 'No conditions configured and exit gating is disabled. Outside Entry/Exit, the engine ignores this transition.'
+        ).dataset.field = 'empty-conditions';
+    }
+    conditions.forEach((condition, index) => {
+        const section = this.pTS_addElement(content, 'div', 'pTS-sub-card');
+        section.dataset.conditionIndex = String(index);
+        section.dataset.conditionType = condition.type;
+        this.pTS_addElement(section, 'div', 'pTS-sub-title', `${index + 1}. ${condition.type}`);
+        this.pTS_renderTransitionProperties(section, condition.properties, condition.enumLabels);
+    });
+    this.pTS_addElement(content, 'div', 'pTS-condition-note',
+        'Configured rules only, not live pass/fail evaluation. Other outgoing transitions and engine transition ordering still apply.');
+}
+
+private pTS_renderTransitionProperties(parent: HTMLElement, properties: Record<string, unknown>, enumLabels: Record<string, string> = {}, prefix = '') {
+    const fields = this.pTS_addElement(parent, 'div', 'pTS-transition-fields');
+    const entries = Object.entries(properties);
+    if (!entries.length) this.pTS_addElement(fields, 'span', 'pTS-condition-note', 'No configured properties');
+    for (const [name, value] of entries) {
+        const path = prefix ? `${prefix}.${name}` : name;
+        const row = this.pTS_addElement(fields, 'div', 'pTS-prop-row');
+        row.dataset.property = path;
+        this.pTS_addElement(row, 'span', 'pTS-prop-label', name).title = path;
+        const holder = this.pTS_addElement(row, 'div', 'pTS-prop-val');
+        if (value !== null && typeof value === 'object' && Object.keys(value).length) {
+            this.pTS_addElement(holder, 'span', '', Array.isArray(value) ? `Array (${value.length})` : 'Object');
+            const children = this.pTS_addElement(fields, 'div', 'pTS-transition-property-children');
+            this.pTS_renderTransitionProperties(children, value as Record<string, unknown>, enumLabels, path);
+        } else {
+            const label = enumLabels[path];
+            if (label) {
+                const select = this.pTS_addElement(holder, 'ui-select');
+                select.setAttribute('disabled', '');
+                const option = this.pTS_addElement(select, 'option', '', label) as HTMLOptionElement;
+                option.value = String(value);
+                option.selected = true;
+                select.title = `${label} (${String(value)})`;
+                this.pTS_setWidget(select, value);
+            } else if (typeof value === 'number' || typeof value === 'boolean') {
+                const widget = this.pTS_addElement(holder, typeof value === 'number' ? 'ui-num-input' : 'ui-checkbox');
+                widget.setAttribute('disabled', '');
+                this.pTS_setWidget(widget, value);
+            } else if (typeof value === 'string') {
+                const widget = this.pTS_addElement(holder, 'ui-input');
+                widget.setAttribute('disabled', '');
+                this.pTS_setWidget(widget, value);
+            } else {
+                this.pTS_addElement(holder, 'span', '', value === null ? 'null' : this.pTS_valueText(value));
+            }
+        }
+    }
+}
+
+private pTS_clearDetails() {
+    if (this.pTS_scriptKey) {
+        ++this.pTS_scriptVersion;
+        this.pTS_scriptKey = '';
+    }
+    this.pTS_detailsKey = '';
+    this.pTS_detailUpdates = [];
 }
 
 private pTS_renderStateDetails(root: HTMLElement) {
-    const card = root.querySelector('#pTS-state-details-card') as HTMLElement | null;
-    const content = root.querySelector('#pTS-state-details-content') as HTMLElement | null;
-    const titleText = root.querySelector('#pTS-state-title-text') as HTMLElement | null;
-    const scriptPanel = root.querySelector('#pTS-script-code-panel') as HTMLElement | null;
-
-    if (!card || !content || !titleText || !scriptPanel) return;
-
-    if (!this.pTS_selectedState) {
-        ++this.pTS_scriptVersion;
+    const card = root.querySelector<HTMLElement>('#pTS-state-details-card');
+    const content = root.querySelector<HTMLElement>('#pTS-state-details-content');
+    const scriptPanel = root.querySelector<HTMLElement>('#pTS-script-code-panel');
+    if (!card || !content || !scriptPanel) return;
+    const state = this.pTS_selectedState;
+    if (!state) {
+        this.pTS_clearDetails();
         card.style.display = 'none';
         scriptPanel.style.display = 'none';
         return;
     }
-
     card.style.display = 'flex';
-    titleText.textContent = `State: ${this.pTS_selectedState.name}`;
-
-    const st = this.pTS_selectedState;
-    let html = '';
-
-    html += `<div class="pTS-sub-card">
-        <div class="pTS-prop-row">
-            <span class="pTS-prop-label">Speed</span>
-            <ui-num-input class="pTS-prop-val" value="${st.speed}" disabled></ui-num-input>
-        </div>
-        <div class="pTS-prop-row">
-            <span class="pTS-prop-label">Speed Multiplier</span>
-            <ui-checkbox class="pTS-prop-val" ${st.speedMultiplierEnabled ? 'checked' : ''} disabled></ui-checkbox>
-        </div>
-    </div>`;
-
-    if (st.clipName || st.type === 'Motion') {
-        html += `<div class="pTS-sub-card">
-            <div class="pTS-sub-title">Animation Clip Motion</div>
-            <div class="pTS-prop-row">
-                <span class="pTS-prop-label">Clip</span>
-                <div class="pTS-asset-badge pTS-prop-val">
-                    <ui-icon value="animation-clip"></ui-icon>
-                    <span>${st.clipName || 'cc.AnimationClip'}</span>
-                </div>
-            </div>
-        </div>`;
-    }
-
-    const components = st.components || [];
-    if (components.length > 0) {
-        for (const comp of components) {
-            html += `<div class="pTS-sub-card">
-                <div class="pTS-sub-title">${comp.className}</div>`;
-
-            let liveProps: Record<string, unknown> | null = null;
-            if (this.pTS_currentState && this.pTS_currentState.found && this.pTS_currentState.components) {
-                const stateComps = this.pTS_currentState.components[st.path];
-                if (stateComps && typeof stateComps === 'object') {
-                    const candidate = stateComps[comp.className];
-                    if (candidate && typeof candidate === 'object') {
-                        liveProps = candidate as Record<string, unknown>;
-                    }
+    this.pTS_setText(root.querySelector('#pTS-state-title-text'), `State: ${state.name} (${state.path})`);
+    const components = state.components || [];
+    const key = JSON.stringify([this.pTS_currentAssetUuid, this.pTS_selectedLayerIndex, state.id,
+        components.map(component => [component.className, Object.keys(component.props), component.attrs])]);
+    if (key !== this.pTS_detailsKey) {
+        this.pTS_detailsKey = key;
+        this.pTS_detailUpdates = [];
+        content.replaceChildren();
+        const general = this.pTS_addElement(content, 'div', 'pTS-sub-card');
+        const addValue = (parent: HTMLElement, name: string, getValue: () => unknown, attr: Record<string, unknown> = {}) => {
+            const row = this.pTS_addElement(parent, 'div', 'pTS-prop-row');
+            row.dataset.property = name;
+            this.pTS_addElement(row, 'span', 'pTS-prop-label', name).title = name;
+            const holder = this.pTS_addElement(row, 'div', 'pTS-prop-val');
+            // Keep controls even if a runtime value becomes unavailable or changes type.
+            const number = this.pTS_addElement(holder, 'ui-num-input');
+            const boolean = this.pTS_addElement(holder, 'ui-checkbox');
+            const enumSelect = this.pTS_addElement(holder, 'ui-select');
+            const text = this.pTS_addElement(holder, 'span');
+            for (const widget of [number, boolean, enumSelect]) widget.setAttribute('disabled', '');
+            if (attr.type === 'Enum' && Array.isArray(attr.enumList)) {
+                for (const item of attr.enumList as Array<{ name?: string; value?: unknown }>) {
+                    const option = this.pTS_addElement(enumSelect, 'option', '', item.name || '') as HTMLOptionElement;
+                    option.value = String(item.value ?? '');
                 }
             }
-
-            const propKeys = Object.keys(comp.props);
-            if (propKeys.length === 0) {
-                html += `<span style="font-size: 11px; opacity: 0.6;">(No serialized properties)</span>`;
-            } else {
-                for (const pName of propKeys) {
-                    const attr = comp.attrs[pName] || {};
-                    const hasLiveValue = !!liveProps && Object.prototype.hasOwnProperty.call(liveProps, pName);
-                    const val = hasLiveValue ? liveProps![pName] : undefined;
-
-                    html += `<div class="pTS-prop-row">
-                        <span class="pTS-prop-label" title="${pName}">${pName}</span>
-                        <div class="pTS-prop-val">`;
-
-                    if (!hasLiveValue) {
-                        html += '<span style="font-size:11px;opacity:0.6;">Runtime value unavailable</span>';
-                    } else if (attr.type === 'Enum' && Array.isArray(attr.enumList)) {
-                        html += `<ui-select disabled style="width: 100%;">`;
-                        attr.enumList.forEach((eItem: unknown) => {
-                            const eObj = eItem as { name?: string; value?: unknown } | undefined;
-                            const isSel = eObj?.value === val;
-                            html += `<option value="${String(eObj?.value ?? '')}" ${isSel ? 'selected' : ''}>${eObj?.name || ''}</option>`;
-                        });
-                        html += `</ui-select>`;
-                    } else if (typeof val === 'boolean') {
-                        html += `<ui-checkbox value="${val}" disabled></ui-checkbox>`;
-                    } else if (typeof val === 'number') {
-                        html += `<ui-num-input value="${val}" disabled></ui-num-input>`;
-                    } else if (val && typeof val === 'object' && 'uuid' in val && typeof val.uuid === 'string') {
-                        const uuidStr = val.uuid;
-                        html += `<div class="pTS-asset-badge"><span>${uuidStr.slice(0, 8)}...</span></div>`;
-                    } else {
-                        html += `<span style="font-size: 11px;">${String(val ?? '')}</span>`;
-                    }
-
-                    html += `</div></div>`;
-                }
+            let previous = '';
+            this.pTS_detailUpdates.push(() => {
+                const value = getValue();
+                const next = JSON.stringify([value === undefined, value]);
+                if (next === previous) return;
+                previous = next;
+                const active = value === undefined ? text : attr.type === 'Enum' && Array.isArray(attr.enumList)
+                    ? enumSelect : typeof value === 'number' ? number : typeof value === 'boolean' ? boolean : text;
+                for (const widget of [number, boolean, enumSelect, text]) widget.style.display = widget === active ? '' : 'none';
+                if (active === text) {
+                    const asset = value && typeof value === 'object' && 'uuid' in value ? value.uuid : undefined;
+                    this.pTS_setText(text, value === undefined ? 'Runtime value unavailable' : this.pTS_valueText(asset ?? value));
+                } else this.pTS_setWidget(active, value);
+            });
+        };
+        addValue(general, 'Speed', () => this.pTS_selectedState?.speed);
+        addValue(general, 'Speed Multiplier', () => this.pTS_selectedState?.speedMultiplierEnabled);
+        addValue(general, 'Clip', () => this.pTS_selectedState?.clipName || 'No animation clip');
+        components.forEach((component, index) => {
+            const subcard = this.pTS_addElement(content, 'div', 'pTS-sub-card');
+            subcard.dataset.component = component.className;
+            this.pTS_addElement(subcard, 'div', 'pTS-sub-title', component.className);
+            const names = Object.keys(component.props);
+            if (!names.length) this.pTS_addElement(subcard, 'span', '', '(No serialized properties)');
+            for (const name of names) {
+                addValue(subcard, name, () => {
+                    const selected = this.pTS_selectedState;
+                    const currentComponent = selected?.components[index];
+                    const stateComponents = selected && this.pTS_currentState?.found ? this.pTS_currentState.components?.[selected.path] : undefined;
+                    const live = currentComponent && stateComponents ? stateComponents[currentComponent.className] : undefined;
+                    const liveProps = live && typeof live === 'object' ? live as Record<string, unknown> : null;
+                    return liveProps && Object.prototype.hasOwnProperty.call(liveProps, name) ? liveProps[name] : undefined;
+                }, component.attrs[name] || {});
             }
-            html += `</div>`;
-        }
+        });
     }
-
-    content.innerHTML = html;
-
-    if (components.length > 0 && components[0].className) {
-        void this.pTS_renderScriptCode(root, components[0].className);
-    } else {
+    for (const patch of this.pTS_detailUpdates) patch();
+    if (components[0]?.className) void this.pTS_renderScriptCode(root, components[0].className);
+    else {
+        if (this.pTS_scriptKey) ++this.pTS_scriptVersion;
+        this.pTS_scriptKey = '';
         scriptPanel.style.display = 'none';
     }
 }
 
 private async pTS_renderScriptCode(root: HTMLElement, className: string) {
-    const scriptPanel = root.querySelector('#pTS-script-code-panel') as HTMLElement | null;
-    const headerTitle = root.querySelector('#pTS-script-header-title') as HTMLElement | null;
-    const codeDisplay = root.querySelector('#pTS-script-display') as HTMLElement | null;
-
+    const scriptPanel = root.querySelector<HTMLElement>('#pTS-script-code-panel');
+    const headerTitle = root.querySelector<HTMLElement>('#pTS-script-header-title');
+    const codeDisplay = root.querySelector<HTMLElement>('#pTS-script-display');
     if (!scriptPanel || !headerTitle || !codeDisplay) return;
+    const key = JSON.stringify([this.pTS_currentAssetUuid, this.pTS_instanceId, this.pTS_selectedLayerIndex, this.pTS_selectedState?.id, className]);
+    if (this.pTS_scriptKey === key) return;
+    this.pTS_scriptKey = key;
     const version = ++this.pTS_scriptVersion;
     const observation = this.pTS_observerId;
-
     scriptPanel.style.display = 'flex';
-    headerTitle.textContent = `${className}.ts`;
-    codeDisplay.textContent = '// Loading TypeScript source...';
-
+    this.pTS_setText(headerTitle, `${className}.ts`);
+    this.pTS_setText(codeDisplay, '// Loading TypeScript source...');
     try {
-        const resRaw = await Editor.Message.request('pts-animgraph', 'get-component-script', { className });
-        if (this.pTS_closed || version !== this.pTS_scriptVersion || observation !== this.pTS_observerId) return;
-        if (resRaw && typeof resRaw === 'object') {
-            const res = resRaw as { scriptName?: string; content?: string };
-            if (res.content) {
-                headerTitle.textContent = res.scriptName || `${className}.ts`;
-                codeDisplay.textContent = res.content;
-                return;
-            }
-        }
-        codeDisplay.textContent = `// Source file for ${className} not found in project assets.`;
-    } catch (e) {
-        if (this.pTS_closed || version !== this.pTS_scriptVersion || observation !== this.pTS_observerId) return;
-        codeDisplay.textContent = `// Error loading script for ${className}: ${String(e)}`;
+        const result = await Editor.Message.request('pts-animgraph', 'get-component-script', { className });
+        if (this.pTS_closed || version !== this.pTS_scriptVersion || observation !== this.pTS_observerId || key !== this.pTS_scriptKey) return;
+        const scriptName = result && typeof result === 'object' && 'scriptName' in result && typeof result.scriptName === 'string'
+            ? result.scriptName : `${className}.ts`;
+        const source = result && typeof result === 'object' && 'content' in result && typeof result.content === 'string'
+            ? result.content : `// Source file for ${className} not found in project assets.`;
+        this.pTS_setText(headerTitle, scriptName);
+        this.pTS_setText(codeDisplay, source);
+    } catch (error) {
+        if (this.pTS_closed || version !== this.pTS_scriptVersion || observation !== this.pTS_observerId || key !== this.pTS_scriptKey) return;
+        this.pTS_setText(codeDisplay, `// Error loading script for ${className}: ${String(error)}`);
     }
 }
 }

@@ -22,17 +22,22 @@ The first available controller is selected initially. If the selected controller
 2. **Layers & Interactive Graph Canvas**:
    - Layer selector dropdown (`Enum`-style) driving active layer view.
    - Editable weight for the selected instance's layer, limited to `[0, 1]`.
-   - Embedded SVG graph canvas reflecting state machine layout with coordinates from `__editorExtras__.centerX` & `centerY`.
-   - Directed transition arrows with SVG marker arrowheads.
-   - **Active State Luminous Halo**: The state node currently playing in preview pulses with a luminous white/cyan halo outline (`__DEBUG_ID__` path matching).
+   - Separate root and nested state-machine graph cards with breadcrumb paths. Each card contains only its own states and transitions, addressed by reference identity rather than repeated display names.
+   - Compact, automatically centered overviews fit the panel width. Large unused coordinate gaps are compressed in display copies; the graph asset's authored positions are not changed. No zooming or panning is required to see the whole machine.
+   - Active states use a steady green outline; active ancestor submachines use a dashed outline. Selection uses a distinct cyan outline.
+   - Click a transition arrow to highlight it and open its read-only conditions panel below the graph cards. The panel shows endpoints, timing/exit configuration, all conditions, nested variable bindings, and known operator enum labels.
+   - Transition properties use the State panel's aligned property rows and read-only typed controls: number fields, checkboxes, enum selections, and text inputs. Nested bindings remain grouped beneath their parent fields; enum tooltips retain the underlying numeric value.
+   - Conditions within one transition are combined with AND. The panel distinguishes empty condition lists from enabled exit-time gates. It shows configured rules, not live pass/fail results; engine transition ordering still applies.
 3. **State Details Card**:
    - Conditional rendering: only appears when a state node on the canvas is clicked/selected.
    - Inspects motion speed, speed multiplier, and bound animation clips.
    - Displays available live state-component values from the selected controller. Missing runtime values are explicitly marked unavailable rather than replaced with authoring defaults.
 4. **Component Script Code Viewer**:
    - Renders the syntax-highlighted TypeScript source code of the selected state component directly in the Inspector.
+   - Progress-only updates retain graph nodes, property widgets, and source content. Source is requested when the component selection changes, not on every live tick. Focused variable inputs are not overwritten by incoming telemetry.
 5. **Dual Surface (Inspector Section + Dockable Panel)**:
    - **Inspector Section**: Mounts on the `animation-graph` asset importer during preview. Outside preview, Creator's native authoring Inspector and Edit action remain unchanged.
+     Creator's filename header is reused; the extension does not add a duplicate filename row in native Inspector.
    - **Dockable Panel**: Open via **Extension -> pTS-AnimGraph -> Open Panel**; choose an asset, then a runtime controller. Live controls appear only during preview.
 6. **Bottom Edit Button**: Launches Creator's native Animation Graph editor panel.
 
@@ -98,6 +103,28 @@ Runtime telemetry arrives through native Electron `pts-animgraph:sync-animgraph`
 * Script identifiers using the project prefix use `pTS`, never `pts` or `PTS`. Package names, JSON keys, and filesystem paths may use `pts`.
 
 ## 5. Change Notes
+
+### Stable rendering, compact subgraphs, and transition conditions
+
+- Replaced flattened nested graphs and name-based endpoints with scoped state-machine records and exact state/transition identities. Parallel arrows remain independently selectable.
+- Retained SVG, state controls, source viewer, and transition panel across live progress updates. Selected live values patch existing controls without resetting scroll or input focus.
+- Added compact automatic overview framing, steady active-state highlighting, transition hit areas, and read-only condition details. Removed the duplicate native Inspector filename row; retained the dockable panel heading.
+- Updated both disk and native scene-script dump producers. Added `scripts/test-graph-hierarchy.js` covering repeated names/copied authoring IDs, nested/empty scopes, local endpoints, self-transitions, parallel transition identity, and resolved condition bindings.
+
+Actual Editor Game View verification on `Borrum_Fighting_Graph`: two scoped graphs (6 states each), correct local edges, fully visible overviews at Inspector width without horizontal overflow, native mouse selection of `Any → death` showing `state == 7`, trigger conditions and exit-time gates, retained live state controls, protected focused variable input, and independent dockable rendering.
+
+A selected-state 1.8-second live sample previously rebuilt graph/details 9 times each and replaced source text 18 times. The updated view produced zero such replacements, retained the selected controls, and kept Inspector scroll at the same position. The selected transition condition panel likewise retained its DOM during live updates.
+
+Verification commands:
+
+```sh
+node extensions/pts-asset/node_modules/typescript/bin/tsc --project extensions/pts-animgraph/tsconfig.json
+node --check extensions/pts-core/src/_cc.js
+node extensions/pts-animgraph/scripts/test-graph-hierarchy.js
+node extensions/pts-asset/scripts/test-preview-subscriptions.js
+node extensions/pts-asset/scripts/test-query-isolation.js
+```
+
 
 ### Runtime instance selection and native Inspector routing
 

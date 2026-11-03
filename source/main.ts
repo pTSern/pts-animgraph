@@ -104,6 +104,7 @@ export interface pTS_IStateDump {
     name: string;
     id: string;
     path: string;
+    stateMachineId: string | null;
     type: string;
     centerX: number;
     centerY: number;
@@ -115,11 +116,29 @@ export interface pTS_IStateDump {
     components: pTS_IStateComponentDump[];
 }
 
+export interface pTS_IConditionDump {
+    type: string;
+    properties: Record<string, unknown>;
+    enumLabels: Record<string, string>;
+}
+
 export interface pTS_ITransitionDump {
+    id: string;
+    type: string;
+    properties: Record<string, unknown>;
+    conditions: pTS_IConditionDump[];
     from: string;
     to: string;
     duration: number;
     hasExitCondition: boolean;
+}
+
+export interface pTS_IStateMachineDump {
+    id: string;
+    name: string;
+    path: string;
+    states: pTS_IStateDump[];
+    transitions: pTS_ITransitionDump[];
 }
 
 export interface pTS_ILayerDump {
@@ -128,8 +147,8 @@ export interface pTS_ILayerDump {
     weight: number;
     additive: boolean;
     mask: boolean;
-    states: pTS_IStateDump[];
-    transitions: pTS_ITransitionDump[];
+    stateMachineId: string;
+    stateMachines: pTS_IStateMachineDump[];
 }
 
 export interface pTS_IGraphDump {
@@ -201,108 +220,207 @@ const pTS_variableTypeNames = ['Float', 'Boolean', 'Trigger', 'Integer', 'Vec3',
 export function pTS_parseAnimGraphFile(filePath: string): pTS_IGraphDump | null {
     try {
         const raw = fs.readFileSync(filePath, 'utf8');
-        const objects = JSON.parse(raw);
+        const objects: unknown = JSON.parse(raw);
+        if (!Array.isArray(objects)) return null;
+        const objectIds = new Map<object, number>();
+        objects.forEach((object: unknown, index: number) => {
+            if (object && typeof object === 'object') objectIds.set(object, index);
+        });
         const getObj = (ref: unknown): Record<string, unknown> | null => {
-            if (ref && typeof ref === 'object') {
-                if ('__id__' in ref && typeof ref.__id__ === 'number') {
-                    return objects[ref.__id__] || null;
-                }
-                return ref as Record<string, unknown>;
-            }
-            return null;
+            if (!ref || typeof ref !== 'object') return null;
+            const object = '__id__' in ref && typeof ref.__id__ === 'number' ? objects[ref.__id__] : ref;
+            return object && typeof object === 'object' && !Array.isArray(object)
+                ? object as Record<string, unknown> : null;
         };
-
-        const root = objects[0];
+        const inlineIds = new Map<object, number>();
+        const getId = (kind: string, object: object): string => {
+            const index = objectIds.get(object);
+            if (index !== undefined) return `${kind}:${index}`;
+            if (!inlineIds.has(object)) inlineIds.set(object, inlineIds.size);
+            return `${kind}:inline:${inlineIds.get(object)}`;
+        };
+        const root = getObj(objects[0]);
         if (!root || root.__type__ !== 'cc.animation.AnimationGraph') return null;
+        // Enum values come from Creator 3.8.8's binary-condition.ts and unary-condition.ts.
+        const pTS_conditionOperators: Record<string, readonly string[]> = {
+            'cc.animation.BinaryCondition': [
+                'EQUAL_TO', 'NOT_EQUAL_TO', 'LESS_THAN', 'LESS_THAN_OR_EQUAL_TO',
+                'GREATER_THAN', 'GREATER_THAN_OR_EQUAL_TO',
+            ],
+            'cc.animation.UnaryCondition': ['TRUTHY', 'FALSY'],
+        };
+        const pTS_transitionFields: Record<string, true> = { from: true, to: true, conditions: true };
+        const pTS_cloneAuthored = (value: unknown, ancestors = new Set<object>(), depth = 0): unknown => {
+            if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+            if (typeof value === 'number') return Number.isFinite(value) ? value : String(value);
+            if (!value || typeof value !== 'object') return null;
+            const resolved = !Array.isArray(value) && '__id__' in value && typeof value.__id__ === 'number'
+                ? objects[value.__id__] : value;
+            if (!resolved || typeof resolved !== 'object') return null;
+            if (ancestors.has(resolved)) return '[Circular]';
+            if (depth >= 16) return '[Max depth]';
+            ancestors.add(resolved);
+            let clone: unknown;
+            if (Array.isArray(resolved)) {
+                clone = resolved.map((item) => pTS_cloneAuthored(item, ancestors, depth + 1));
+            } else {
+                const properties: Record<string, unknown> = {};
+                for (const [key, item] of Object.entries(resolved)) {
+                    if (key.startsWith('__') && key !== '__type__' && key !== '__uuid__') continue;
+                    properties[key] = pTS_cloneAuthored(item, ancestors, depth + 1);
+                }
+                clone = properties;
+            }
+            ancestors.delete(resolved);
+            return clone;
+        };
+        const pTS_authoredProperties = (
+            object: Record<string, unknown>, excluded: Record<string, true> = {},
+        ): Record<string, unknown> => {
+            const properties: Record<string, unknown> = {};
+            const ancestors = new Set<object>([object]);
+            for (const [key, value] of Object.entries(object)) {
+                if (key.startsWith('__') || Object.prototype.hasOwnProperty.call(excluded, key)) continue;
+                properties[key] = pTS_cloneAuthored(value, ancestors);
+            }
+            return properties;
+        };
+        const pTS_conditionDump = (condition: Record<string, unknown>): pTS_IConditionDump => {
+            const type = typeof condition.__type__ === 'string' ? condition.__type__ : '';
+            const properties = pTS_authoredProperties(condition);
+            const enumLabels: Record<string, string> = {};
+            const collectLabels = (value: unknown, valueType: string, path: string): void => {
+                if (!value || typeof value !== 'object') return;
+                const object = value as Record<string, unknown>;
+                const operator = object.operator;
+                const labels = pTS_conditionOperators[valueType];
+                if (labels && typeof operator === 'number' && Number.isInteger(operator) && labels[operator]) {
+                    enumLabels[`${path}operator`] = labels[operator];
+                }
+                for (const [key, nested] of Object.entries(object)) {
+                    const nestedType = nested && typeof nested === 'object' && '__type__' in nested
+                        && typeof nested.__type__ === 'string' ? nested.__type__ : '';
+                    collectLabels(nested, nestedType, `${path}${key}.`);
+                }
+            };
+            collectLabels(properties, type, '');
+            return { type, properties, enumLabels };
+        };
+        const pTS_inlineTransitionIds = new Map<object, number>();
+        const pTS_transitionId = (transition: object): string => {
+            const index = objectIds.get(transition);
+            if (index !== undefined) return `transition:${index}`;
+            if (!pTS_inlineTransitionIds.has(transition)) {
+                pTS_inlineTransitionIds.set(transition, pTS_inlineTransitionIds.size);
+            }
+            return `transition:inline:${pTS_inlineTransitionIds.get(transition)}`;
+        };
 
         const layers: pTS_ILayerDump[] = [];
         const rawLayers = Array.isArray(root._layers) ? root._layers : [];
         rawLayers.forEach((lRef: unknown, lIdx: number) => {
             const lObj = getObj(lRef);
             if (!lObj) return;
-            const states: pTS_IStateDump[] = [];
-            const transitions: pTS_ITransitionDump[] = [];
-
-            function walkSM(smRef: unknown, currentPath: string) {
-                const sm = getObj(smRef);
-                if (!sm) return;
+            const rootMachine = getObj(lObj._stateMachine);
+            if (!rootMachine) return;
+            const layerName = typeof lObj.name === 'string' ? lObj.name : `Layer ${lIdx}`;
+            const stateMachines: pTS_IStateMachineDump[] = [];
+            const pending = [{ object: rootMachine, name: layerName, path: layerName }];
+            const visited = new Set<object>();
+            for (let index = 0; index < pending.length; index++) {
+                const { object: sm, name, path: machinePath } = pending[index];
+                if (visited.has(sm)) continue;
+                visited.add(sm);
+                const machine: pTS_IStateMachineDump = {
+                    id: getId('machine', sm), name, path: machinePath, states: [], transitions: [],
+                };
+                stateMachines.push(machine);
                 const rawStates = Array.isArray(sm._states) ? sm._states : [];
-                rawStates.forEach((stRef: unknown) => {
+                const stateIds = new Map<object, string>();
+                const entryState = getObj(sm._entryState);
+                const exitState = getObj(sm._exitState);
+                const anyState = getObj(sm._anyState);
+                for (const stRef of rawStates) {
                     const st = getObj(stRef);
-                    if (!st) return;
+                    if (!st) continue;
                     const stateName = typeof st.name === 'string' ? st.name : '';
-                    const statePath = currentPath + '/' + stateName;
-                    const extras = (st.__editorExtras__ && typeof st.__editorExtras__ === 'object') ? (st.__editorExtras__ as Record<string, unknown>) : {};
+                    const statePath = `${machinePath}/${stateName}`;
+                    const className = typeof st.__type__ === 'string' ? st.__type__ : '';
+                    const type = st === entryState ? 'Entry' : st === exitState ? 'Exit' : st === anyState ? 'Any'
+                        : className === 'cc.animation.SubStateMachine' ? 'SubStateMachine'
+                            : className === 'cc.animation.Motion' ? 'Motion'
+                                : className === 'cc.animation.EmptyState' ? 'Empty'
+                                    : className === 'cc.animation.ProceduralPoseState' ? 'ProceduralPose'
+                                        : className.slice(className.lastIndexOf('.') + 1);
+                    const nested = type === 'SubStateMachine' ? getObj(st._stateMachine) : null;
+                    const extras = getObj(st.__editorExtras__) || {};
                     const comps: pTS_IStateComponentDump[] = [];
                     const rawComps = Array.isArray(st._components) ? st._components : [];
-                    rawComps.forEach((cRef: unknown) => {
+                    for (const cRef of rawComps) {
                         const c = getObj(cRef);
-                        if (!c) return;
+                        if (!c) continue;
                         const props: Record<string, unknown> = {};
-                        for (const k of Object.keys(c)) {
-                            if (!k.startsWith('_') && k !== '__type__') {
-                                props[k] = c[k];
-                            }
+                        for (const key of Object.keys(c)) {
+                            if (!key.startsWith('_')) props[key] = c[key];
                         }
                         comps.push({
                             className: typeof c.__type__ === 'string' ? c.__type__ : '',
-                            props,
-                            attrs: {}
+                            props, attrs: {},
                         });
-                    });
-
-                    let clipName: string | null = null;
-                    const motionObj = getObj(st.motion);
-                    if (motionObj) {
-                        const clipObj = getObj(motionObj.clip);
-                        if (clipObj) {
-                            clipName = typeof clipObj._name === 'string' ? clipObj._name : (typeof clipObj.name === 'string' ? clipObj.name : null);
-                        }
                     }
-
-                    states.push({
+                    const motionObj = getObj(st.motion);
+                    const clipObj = motionObj ? getObj(motionObj.clip) : null;
+                    const id = getId('state', st);
+                    stateIds.set(st, id);
+                    machine.states.push({
                         name: stateName,
-                        id: typeof extras.id === 'string' ? extras.id : stateName,
+                        id,
                         path: statePath,
-                        type: stateName === 'Entry' ? 'Entry' : stateName === 'Exit' ? 'Exit' : stateName === 'Any' ? 'Any' : (st._stateMachine || st.stateMachine) ? 'SubStateMachine' : 'Motion',
+                        stateMachineId: nested ? getId('machine', nested) : null,
+                        type,
                         centerX: typeof extras.centerX === 'number' ? extras.centerX : 0,
                         centerY: typeof extras.centerY === 'number' ? extras.centerY : 0,
                         speed: typeof st.speed === 'number' ? st.speed : 1,
                         speedMultiplier: typeof st.speedMultiplier === 'string' ? st.speedMultiplier : '',
                         speedMultiplierEnabled: !!st.speedMultiplierEnabled,
-                        clipName,
-                        clipUuid: null,
-                        components: comps
+                        clipName: typeof clipObj?._name === 'string' ? clipObj._name
+                            : typeof clipObj?.name === 'string' ? clipObj.name : null,
+                        clipUuid: typeof clipObj?.__uuid__ === 'string' ? clipObj.__uuid__ : null,
+                        components: comps,
                     });
-
-                    if (st._stateMachine) walkSM(st._stateMachine, statePath);
-                });
-
-                const rawTrans = Array.isArray(sm._transitions) ? sm._transitions : [];
-                rawTrans.forEach((trRef: unknown) => {
+                    if (nested) pending.push({ object: nested, name: stateName, path: statePath });
+                }
+                const rawTransitions = Array.isArray(sm._transitions) ? sm._transitions : [];
+                for (const trRef of rawTransitions) {
                     const tr = getObj(trRef);
-                    if (!tr) return;
+                    if (!tr) continue;
                     const fromObj = getObj(tr.from);
                     const toObj = getObj(tr.to);
-                    transitions.push({
-                        from: typeof fromObj?.name === 'string' ? fromObj.name : '',
-                        to: typeof toObj?.name === 'string' ? toObj.name : '',
+                    const from = fromObj ? stateIds.get(fromObj) : undefined;
+                    const to = toObj ? stateIds.get(toObj) : undefined;
+                    // A malformed cross-machine reference must never become a same-name edge.
+                    if (from === undefined || to === undefined) continue;
+                    machine.transitions.push({
+                        id: pTS_transitionId(tr),
+                        type: typeof tr.__type__ === 'string' ? tr.__type__ : '',
+                        properties: pTS_authoredProperties(tr, pTS_transitionFields),
+                        conditions: (Array.isArray(tr.conditions) ? tr.conditions : [])
+                            .map(getObj).filter((condition): condition is Record<string, unknown> => !!condition)
+                            .map(pTS_conditionDump),
+                        from, to,
                         duration: typeof tr.duration === 'number' ? tr.duration : 0,
-                        hasExitCondition: !!tr.exitConditionEnabled
+                        hasExitCondition: !!tr.exitConditionEnabled,
                     });
-                });
+                }
             }
-
-            walkSM(lObj._stateMachine, typeof lObj.name === 'string' ? lObj.name : 'main');
-
             layers.push({
                 index: lIdx,
-                name: typeof lObj.name === 'string' ? lObj.name : `Layer ${lIdx}`,
+                name: layerName,
                 weight: typeof lObj.weight === 'number' ? lObj.weight : 1.0,
                 additive: !!lObj.additive,
                 mask: !!lObj.mask,
-                states,
-                transitions
+                stateMachineId: getId('machine', rootMachine),
+                stateMachines,
             });
         });
 
