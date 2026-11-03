@@ -1,0 +1,90 @@
+{
+    "$schema": "./@types/schema/package/index.json",
+    "package_version": 2,
+    "name": "pts-animgraph",
+    "version": "1.0.0",
+    "author": "pTSern",
+    "editor": ">=3.8.8",
+    "description": "i18n:pts-animgraph.description",
+    "main": "./bootstrap.js",
+    "scripts": {
+        "build": "tsc",
+        "watch": "tsc -w"
+    },
+    "panels": {
+        "default": {
+            "title": "pTS Animation Graph",
+            "type": "dockable",
+            "main": "./dist/panel.js",
+            "size": {
+                "min-width": 460,
+                "min-height": 400,
+                "width": 640,
+                "height": 600
+            }
+        }
+    },
+    "contributions": {
+        "inspector": {
+            "section": {
+                "asset": {
+                    "animation-graph": "./dist/animgraph.js"
+                }
+            }
+        },
+        "menu": [
+            {
+                "path": "i18n:menu.extension/pTS-AnimGraph",
+                "label": "Open Panel",
+                "message": "open-panel"
+            },
+            {
+                "path": "i18n:menu.extension/pTS-AnimGraph",
+                "label": "Reload",
+                "message": "reload"
+            }
+        ],
+        "messages": {
+            "open-panel": {
+                "methods": [
+                    "openPanel"
+                ]
+            },
+            "reload": {
+                "methods": [
+                    "reload"
+                ]
+            },
+            "observe-animgraph": {
+                "methods": [
+                    "observeAnimGraph"
+                ]
+            },
+            "unobserve-animgraph": {
+                "methods": [
+                    "unobserveAnimGraph"
+                ]
+            },
+            "set-animgraph-variable": {
+                "methods": [
+                    "setAnimGraphVariable"
+                ]
+            },
+            "set-animgraph-layer-weight": {
+                "methods": [
+                    "setAnimGraphLayerWeight"
+                ]
+            },
+            "log-animgraph-runtime": {
+                "methods": [
+                    "logAnimGraphRuntime"
+                ]
+            },
+            "get-component-script": {
+                "methods": [
+                    "getComponentScript"
+                ]
+            }
+        }
+    }
+}
