@@ -104,6 +104,14 @@ Runtime telemetry arrives through native Electron `pts-animgraph:sync-animgraph`
 
 ## 5. Change Notes
 
+### Complete runtime state component property coverage
+
+- Preserved all `@property` and `@editor_property` state component declarations in runtime mode, including fields declared after `onStateMachineEnters` (`onStateMachineExits`, `tracers`) and declared fields with leading underscores (`_activeController`, `_isStateActive`, `_stateEnterTime`, `_lastReplayTime`, `_cachedDuration`).
+- Updated `_pTS_extractLiveComponents` in `pts-core` (`_cc.js`) to extract declared CCClass and editor properties rather than filtering with `!k.startsWith('_')`, with reference serialization enabled for live `Component` / `Node` targets (`_activeController`) and declared attribute metadata (`type`, `min`, `tooltip`, `readonly`, `group`).
+- Enriched authored dump parsing (`main.ts`) with scene-script component reflection when available, and resolved authoring JSON properties without dropping valid underscored properties.
+- Updated the Inspector state details view (`animgraph.ts`) to form a complete property union of authored and live properties for each component, formatted runtime component/node references cleanly, and maintained DOM stability across live telemetry ticks.
+- Added `scripts/test-state-components.js` regression test covering complete property preservation and internal engine field exclusion.
+
 ### Stable rendering, compact subgraphs, and transition conditions
 
 - Replaced flattened nested graphs and name-based endpoints with scoped state-machine records and exact state/transition identities. Parallel arrows remain independently selectable.

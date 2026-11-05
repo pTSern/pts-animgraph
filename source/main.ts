@@ -360,8 +360,10 @@ export function pTS_parseAnimGraphFile(filePath: string): pTS_IGraphDump | null 
                         const c = getObj(cRef);
                         if (!c) continue;
                         const props: Record<string, unknown> = {};
-                        for (const key of Object.keys(c)) {
-                            if (!key.startsWith('_')) props[key] = c[key];
+                        for (const [key, val] of Object.entries(c)) {
+                            if (!key.startsWith('__') && key !== '_objFlags' && key !== '_id' && key !== '_name') {
+                                props[key] = pTS_cloneAuthored(val);
+                            }
                         }
                         comps.push({
                             className: typeof c.__type__ === 'string' ? c.__type__ : '',
@@ -517,6 +519,33 @@ function pTS_receivePreviewSession(event: pTS_IPreviewSessionEvent, value: unkno
     }
     for (const observation of pTS_previewObservations.values()) pTS_sendObservation(observation);
 }
+function pTS_enrichDumpWithSceneData(authoring: pTS_IGraphDump, scene: pTS_IGraphDump): void {
+    if (!authoring || !scene || !Array.isArray(authoring.layers) || !Array.isArray(scene.layers)) return;
+    for (let l = 0; l < authoring.layers.length; l++) {
+        const authLayer = authoring.layers[l];
+        const sceneLayer = scene.layers.find(sl => sl.index === authLayer.index || sl.name === authLayer.name);
+        if (!sceneLayer) continue;
+        for (const authSm of authLayer.stateMachines) {
+            const sceneSm = sceneLayer.stateMachines.find(sm => sm.name === authSm.name || sm.path === authSm.path);
+            if (!sceneSm) continue;
+            for (const authSt of authSm.states) {
+                const sceneSt = sceneSm.states.find(st => st.name === authSt.name || st.path === authSt.path);
+                if (!sceneSt) continue;
+                if (!authSt.components.length && sceneSt.components.length) {
+                    authSt.components = sceneSt.components;
+                } else {
+                    for (const authComp of authSt.components) {
+                        const sceneComp = sceneSt.components.find(c => c.className === authComp.className);
+                        if (!sceneComp) continue;
+                        authComp.attrs = { ...sceneComp.attrs, ...authComp.attrs };
+                        authComp.props = { ...sceneComp.props, ...authComp.props };
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 function pTS_sendObservation(observation: pTS_IPreviewObservation, unsubscribe = false) {
     if (!pTS_previewContents || pTS_previewContents.isDestroyed() || !pTS_previewSessionId) return;
@@ -672,19 +701,20 @@ export const methods: Record<string, (...args: unknown[]) => unknown> = {
             }
         } catch (e) {}
 
-        // 2. Fallback to scene-script dump if disk query is unavailable
+        // 2. Query scene-script dump to enrich component properties/attributes or fallback if disk query is unavailable
         if (pTS_previewObservations.get(info.observerId) !== observation) return initialState;
-        if (!authoringDump) {
-            try {
-                const sceneDump = await Editor.Message.request('scene', 'execute-scene-script', {
-                    name: 'pts-core',
-                    method: 'pTS_get_animgraph_dump',
-                    args: [info.uuid]
-                }) as pTS_IGraphDump | null;
-                if (sceneDump) authoringDump = sceneDump;
-            } catch (err) {}
-        }
-
+        try {
+            const sceneDump = await Editor.Message.request('scene', 'execute-scene-script', {
+                name: 'pts-core',
+                method: 'pTS_get_animgraph_dump',
+                args: [info.uuid]
+            }) as pTS_IGraphDump | null;
+            if (!authoringDump && sceneDump) {
+                authoringDump = sceneDump;
+            } else if (authoringDump && sceneDump) {
+                pTS_enrichDumpWithSceneData(authoringDump, sceneDump);
+            }
+        } catch (err) {}
         if (pTS_previewObservations.get(info.observerId) !== observation) return initialState;
         observation.state = {
             ...observation.state,

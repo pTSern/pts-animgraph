@@ -47,7 +47,19 @@ const empty = machine(false);
 const leftState = state(root, 'cc.animation.SubStateMachine', 'Left', left);
 const rightState = state(root, 'cc.animation.SubStateMachine', 'Right', right);
 state(root, 'cc.animation.Motion', 'Entry'); // Must not be classified as a special state by name.
+const transitionComp = record({
+    __type__: 'Character_Graph_Transition',
+    _objFlags: 0,
+    _id: 'transition-comp-id',
+    fast: record({ __uuid__: 'mock-fast-spine-uuid' }),
+    intLoopCountToTrigger: 6,
+    onStateMachineEnters: [],
+    onStateMachineExits: [],
+    tracers: ['t1'],
+    _isStateActive: true,
+});
 const leftIdle = state(left, 'cc.animation.Motion', 'Idle');
+objects[leftIdle.__id__]._components.push(transitionComp);
 const rightIdle = state(right, 'cc.animation.Motion', 'Idle');
 state(left, 'cc.animation.SubStateMachine', 'Empty', empty);
 const binding = record({ __type__: 'cc.animation.TCVariableBinding', type: 3, variableName: 'state' });
@@ -114,6 +126,16 @@ try {
     assert.equal(leftGraph.transitions[0].to, leftMotion.id);
     assert.equal(rightGraph.transitions[0].to, rightMotion.id);
     assert.ok(leftGraph.transitions.some(edge => edge.from === leftMotion.id && edge.to === leftMotion.id), 'self-transitions must survive the dump');
+    const dumpedComp = leftMotion.components[0];
+    assert.ok(dumpedComp, 'state components must survive the authored dump');
+    assert.equal(dumpedComp.className, 'Character_Graph_Transition');
+    assert.equal(dumpedComp.props.intLoopCountToTrigger, 6);
+    assert.deepEqual(dumpedComp.props.onStateMachineEnters, []);
+    assert.deepEqual(dumpedComp.props.onStateMachineExits, [], 'properties below onStateMachineEnters must be preserved');
+    assert.deepEqual(dumpedComp.props.tracers, ['t1']);
+    assert.equal(dumpedComp.props._isStateActive, true, 'authored properties starting with underscore must not be stripped');
+    assert.equal(dumpedComp.props._objFlags, undefined, 'engine internal _objFlags must be excluded');
+    assert.equal(dumpedComp.props._id, undefined, 'engine internal _id must be excluded');
     const second = pTS_parseAnimGraphFile(file);
     assert.deepEqual(second.layers, dump.layers, 'same asset must retain deterministic identities between observations');
     console.log('pTS nested graph hierarchy and endpoint isolation checks passed.');

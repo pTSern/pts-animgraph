@@ -1,5 +1,5 @@
 import type { AssetInfo } from '@cocos/creator-types/editor/packages/asset-db/@types/public';
-import type { pTS_IAnimGraphState, pTS_IGraphDump, pTS_ILayerDump, pTS_IStateDump, pTS_IStateMachineDump, pTS_ITransitionDump } from './main';
+import type { pTS_IAnimGraphState, pTS_IGraphDump, pTS_ILayerDump, pTS_IStateComponentDump, pTS_IStateDump, pTS_IStateMachineDump, pTS_ITransitionDump } from './main';
 
 interface pTSEditorGlobal {
     Message: {
@@ -375,6 +375,59 @@ export const style = `
     min-width: 0;
 }
 
+.pTS-array-section {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin: 3px 0;
+    --ui-section-header-padding: 3px 0;
+}
+
+.pTS-array-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+}
+
+.pTS-array-count {
+    width: 48px;
+    flex: 0 0 auto;
+}
+
+.pTS-array-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 4px 0 4px 8px;
+    border-left: 2px solid #3c4858;
+    margin-left: 6px;
+    margin-top: 3px;
+}
+
+.pTS-array-item-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+}
+
+.pTS-array-idx {
+    font-size: 10px;
+    font-family: Consolas, monospace;
+    opacity: 0.6;
+    min-width: 28px;
+    flex: 0 0 auto;
+    text-align: right;
+}
+
+.pTS-array-empty {
+    font-size: 11px;
+    font-style: italic;
+    opacity: 0.5;
+    padding: 2px 0;
+}
 .pTS-asset-badge {
     display: flex;
     align-items: center;
@@ -876,8 +929,20 @@ private pTS_addElement(parent: HTMLElement, tag: string, className = '', text?: 
 }
 
 private pTS_valueText(value: unknown): string {
-    if (value && typeof value === 'object') return JSON.stringify(value);
-    return String(value ?? '');
+    if (!value) return value === null ? 'null' : String(value ?? '');
+    if (typeof value === 'object') {
+        const obj = value as Record<string, unknown>;
+        if (obj.__runtimeReference__) {
+            const name = typeof obj.name === 'string' && obj.name ? obj.name : 'Node';
+            const type = typeof obj.componentType === 'string' && obj.componentType ? ` (${obj.componentType})` : '';
+            return `[${name}${type}]`;
+        }
+        if (typeof obj.uuid === 'string') {
+            return typeof obj.__expectedType__ === 'string' ? `[${obj.__expectedType__}: ${obj.uuid}]` : obj.uuid;
+        }
+        try { return JSON.stringify(value); } catch { return '[Object]'; }
+    }
+    return String(value);
 }
 
 private pTS_setWidget(element: HTMLElement, value: unknown) {
@@ -1299,68 +1364,208 @@ private pTS_renderStateDetails(root: HTMLElement) {
     card.style.display = 'flex';
     this.pTS_setText(root.querySelector('#pTS-state-title-text'), `State: ${state.name} (${state.path})`);
     const components = state.components || [];
-    const key = JSON.stringify([this.pTS_currentAssetUuid, this.pTS_selectedLayerIndex, state.id,
-        components.map(component => [component.className, Object.keys(component.props), component.attrs])]);
+    const stateComponents = state && this.pTS_currentState?.found ? this.pTS_currentState.components?.[state.path] : undefined;
+
+    const getLive = (className: string) => {
+        const live = stateComponents ? stateComponents[className] : undefined;
+        const rec = live && typeof live === 'object' ? live as Record<string, unknown> : null;
+        const props = rec && 'values' in rec && typeof rec.values === 'object' && rec.values !== null
+            ? rec.values as Record<string, unknown>
+            : rec;
+        const attrs = rec && 'attrs' in rec && typeof rec.attrs === 'object' && rec.attrs !== null
+            ? rec.attrs as Record<string, Record<string, unknown>>
+            : null;
+        return { props, attrs };
+    };
+
+    const compEntries: Array<{ className: string; component: pTS_IStateComponentDump | null }> = [];
+    const seenClasses = new Set<string>();
+    for (const comp of components) {
+        seenClasses.add(comp.className);
+        compEntries.push({ className: comp.className, component: comp });
+    }
+    if (stateComponents) {
+        for (const compCls of Object.keys(stateComponents)) {
+            if (!seenClasses.has(compCls)) {
+                seenClasses.add(compCls);
+                compEntries.push({ className: compCls, component: null });
+            }
+        }
+    }
+
+    const key = JSON.stringify([
+        this.pTS_currentAssetUuid,
+        this.pTS_selectedLayerIndex,
+        state.id,
+        compEntries.map(({ className, component }) => {
+            const { props: liveProps, attrs: liveAttrs } = getLive(className);
+            const propSet = new Set(Object.keys(component?.props || {}));
+            if (liveProps) {
+                for (const k of Object.keys(liveProps)) {
+                    if (k !== '__attrs__') propSet.add(k);
+                }
+            }
+            const propDescriptors = Array.from(propSet).map(n => {
+                const a = (liveAttrs && liveAttrs[n]) || (component?.attrs && component.attrs[n]) || {};
+                const isArr = Boolean(a.isArray || Array.isArray(component?.props?.[n]) || Array.isArray(liveProps?.[n]));
+                return [n, isArr];
+            });
+            return [className, propDescriptors];
+        })
+    ]);
+
     if (key !== this.pTS_detailsKey) {
         this.pTS_detailsKey = key;
         this.pTS_detailUpdates = [];
         content.replaceChildren();
         const general = this.pTS_addElement(content, 'div', 'pTS-sub-card');
-        const addValue = (parent: HTMLElement, name: string, getValue: () => unknown, attr: Record<string, unknown> = {}) => {
+        const addValue = (parent: HTMLElement, name: string, getValue: () => unknown, attr: Record<string, unknown> = {}, isArrayProp = false) => {
+            if (isArrayProp) {
+                const section = this.pTS_addElement(parent, 'ui-section', 'pTS-array-section') as HTMLElement & { expand?: boolean };
+                section.setAttribute('expand', '');
+                section.setAttribute('no-border', '');
+                section.dataset.property = name;
+
+                const headerDiv = this.pTS_addElement(section, 'div', 'pTS-array-header');
+                headerDiv.setAttribute('slot', 'header');
+                this.pTS_addElement(headerDiv, 'span', 'pTS-prop-label', name).title = name;
+
+                const countInput = this.pTS_addElement(headerDiv, 'ui-num-input', 'pTS-array-count');
+                countInput.setAttribute('disabled', '');
+                countInput.setAttribute('step', '1');
+                countInput.setAttribute('min', '0');
+                countInput.setAttribute('preci', '0');
+
+                const listContainer = this.pTS_addElement(section, 'div', 'pTS-array-list');
+                const emptyLabel = this.pTS_addElement(listContainer, 'div', 'pTS-array-empty', 'No items');
+
+                let previousArrSignature = '';
+                this.pTS_detailUpdates.push(() => {
+                    const rawVal = getValue();
+                    const arr = Array.isArray(rawVal) ? rawVal : [];
+                    const signature = JSON.stringify(arr);
+                    if (signature === previousArrSignature) return;
+                    previousArrSignature = signature;
+
+                    this.pTS_setWidget(countInput, arr.length);
+                    emptyLabel.style.display = arr.length === 0 ? '' : 'none';
+
+                    const existingRows = Array.from(listContainer.querySelectorAll<HTMLElement>('.pTS-array-item-row'));
+                    while (existingRows.length > arr.length) {
+                        const row = existingRows.pop();
+                        if (row) listContainer.removeChild(row);
+                    }
+
+                    for (let i = 0; i < arr.length; i++) {
+                        let row = existingRows[i];
+                        let input: HTMLElement;
+                        if (!row) {
+                            row = this.pTS_addElement(listContainer, 'div', 'pTS-prop-row pTS-array-item-row');
+                            row.dataset.index = String(i);
+                            this.pTS_addElement(row, 'span', 'pTS-array-idx', `[${i}]`);
+                            const valHolder = this.pTS_addElement(row, 'div', 'pTS-prop-val');
+                            input = this.pTS_addElement(valHolder, 'ui-input');
+                            input.setAttribute('disabled', '');
+                        } else {
+                            input = row.querySelector('ui-input') || (row.querySelector('.pTS-prop-val > *') as HTMLElement);
+                        }
+                        const itemVal = arr[i];
+                        const displayVal = typeof itemVal === 'string' ? itemVal
+                            : (typeof itemVal === 'number' || typeof itemVal === 'boolean') ? String(itemVal)
+                            : this.pTS_valueText(itemVal);
+                        this.pTS_setWidget(input, displayVal);
+                    }
+                });
+                return;
+            }
+
             const row = this.pTS_addElement(parent, 'div', 'pTS-prop-row');
             row.dataset.property = name;
             this.pTS_addElement(row, 'span', 'pTS-prop-label', name).title = name;
             const holder = this.pTS_addElement(row, 'div', 'pTS-prop-val');
-            // Keep controls even if a runtime value becomes unavailable or changes type.
+
             const number = this.pTS_addElement(holder, 'ui-num-input');
             const boolean = this.pTS_addElement(holder, 'ui-checkbox');
             const enumSelect = this.pTS_addElement(holder, 'ui-select');
+            const strInput = this.pTS_addElement(holder, 'ui-input');
             const text = this.pTS_addElement(holder, 'span');
-            for (const widget of [number, boolean, enumSelect]) widget.setAttribute('disabled', '');
+
+            for (const widget of [number, boolean, enumSelect, strInput]) widget.setAttribute('disabled', '');
+
             if (attr.type === 'Enum' && Array.isArray(attr.enumList)) {
                 for (const item of attr.enumList as Array<{ name?: string; value?: unknown }>) {
                     const option = this.pTS_addElement(enumSelect, 'option', '', item.name || '') as HTMLOptionElement;
                     option.value = String(item.value ?? '');
                 }
             }
+
             let previous = '';
             this.pTS_detailUpdates.push(() => {
                 const value = getValue();
                 const next = JSON.stringify([value === undefined, value]);
                 if (next === previous) return;
                 previous = next;
-                const active = value === undefined ? text : attr.type === 'Enum' && Array.isArray(attr.enumList)
-                    ? enumSelect : typeof value === 'number' ? number : typeof value === 'boolean' ? boolean : text;
-                for (const widget of [number, boolean, enumSelect, text]) widget.style.display = widget === active ? '' : 'none';
+
+                const isEnum = attr.type === 'Enum' && Array.isArray(attr.enumList);
+                const active = value === undefined ? text
+                    : isEnum ? enumSelect
+                    : typeof value === 'number' ? number
+                    : typeof value === 'boolean' ? boolean
+                    : (typeof value === 'string' || (value && typeof value === 'object')) ? strInput
+                    : text;
+
+                for (const widget of [number, boolean, enumSelect, strInput, text]) widget.style.display = widget === active ? '' : 'none';
+
                 if (active === text) {
-                    const asset = value && typeof value === 'object' && 'uuid' in value ? value.uuid : undefined;
-                    this.pTS_setText(text, value === undefined ? 'Runtime value unavailable' : this.pTS_valueText(asset ?? value));
-                } else this.pTS_setWidget(active, value);
+                    this.pTS_setText(text, value === undefined ? 'Runtime value unavailable' : this.pTS_valueText(value));
+                } else if (active === strInput) {
+                    const displayStr = typeof value === 'string' ? value : this.pTS_valueText(value);
+                    this.pTS_setWidget(strInput, displayStr);
+                } else {
+                    this.pTS_setWidget(active, value);
+                }
             });
         };
         addValue(general, 'Speed', () => this.pTS_selectedState?.speed);
         addValue(general, 'Speed Multiplier', () => this.pTS_selectedState?.speedMultiplierEnabled);
         addValue(general, 'Clip', () => this.pTS_selectedState?.clipName || 'No animation clip');
-        components.forEach((component, index) => {
+        compEntries.forEach(({ className, component }) => {
             const subcard = this.pTS_addElement(content, 'div', 'pTS-sub-card');
-            subcard.dataset.component = component.className;
-            this.pTS_addElement(subcard, 'div', 'pTS-sub-title', component.className);
-            const names = Object.keys(component.props);
+            subcard.dataset.component = className;
+            this.pTS_addElement(subcard, 'div', 'pTS-sub-title', className);
+            const { props: liveProps, attrs: liveAttrs } = getLive(className);
+            const propSet = new Set(Object.keys(component?.props || {}));
+            if (liveProps) {
+                for (const k of Object.keys(liveProps)) {
+                    if (k !== '__attrs__') propSet.add(k);
+                }
+            }
+            const names = Array.from(propSet);
             if (!names.length) this.pTS_addElement(subcard, 'span', '', '(No serialized properties)');
             for (const name of names) {
+                const attr = (liveAttrs && liveAttrs[name]) || (component?.attrs && component.attrs[name]) || {};
+                const authoredVal = component?.props ? component.props[name] : undefined;
+                const liveVal = liveProps ? liveProps[name] : undefined;
+                const isArr = Boolean(attr.isArray || Array.isArray(authoredVal) || Array.isArray(liveVal));
                 addValue(subcard, name, () => {
                     const selected = this.pTS_selectedState;
-                    const currentComponent = selected?.components[index];
-                    const stateComponents = selected && this.pTS_currentState?.found ? this.pTS_currentState.components?.[selected.path] : undefined;
-                    const live = currentComponent && stateComponents ? stateComponents[currentComponent.className] : undefined;
-                    const liveProps = live && typeof live === 'object' ? live as Record<string, unknown> : null;
-                    return liveProps && Object.prototype.hasOwnProperty.call(liveProps, name) ? liveProps[name] : undefined;
-                }, component.attrs[name] || {});
+                    const liveStateComps = selected && this.pTS_currentState?.found ? this.pTS_currentState.components?.[selected.path] : undefined;
+                    const liveComp = liveStateComps ? liveStateComps[className] : undefined;
+                    const rec = liveComp && typeof liveComp === 'object' ? liveComp as Record<string, unknown> : null;
+                    const liveProperties = rec && 'values' in rec && typeof rec.values === 'object' && rec.values !== null
+                        ? rec.values as Record<string, unknown>
+                        : rec;
+                    if (liveProperties && Object.prototype.hasOwnProperty.call(liveProperties, name)) {
+                        return liveProperties[name];
+                    }
+                    return component?.props ? component.props[name] : undefined;
+                }, attr, isArr);
             }
         });
     }
     for (const patch of this.pTS_detailUpdates) patch();
-    if (components[0]?.className) void this.pTS_renderScriptCode(root, components[0].className);
+    const firstClass = compEntries[0]?.className;
+    if (firstClass) void this.pTS_renderScriptCode(root, firstClass);
     else {
         if (this.pTS_scriptKey) ++this.pTS_scriptVersion;
         this.pTS_scriptKey = '';
